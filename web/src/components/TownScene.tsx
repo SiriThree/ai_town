@@ -11,7 +11,7 @@ import {TOWN_BUILDINGS} from "../lib/town-map";
 import {INTERIORS} from "../lib/scene-data";
 import { MAP, worldTime, type World } from "../lib/world";
 
-export default function TownScene({ world, selected, onSelect, speech, onExpand, controlsBlocked, onSceneChange }: { controlsBlocked:boolean; onSceneChange:(id:SceneId)=>void; world: World; selected: string; onSelect: (id: string) => void; speech: ChatTurn | null; onExpand: () => void }) {
+export default function TownScene({ world, selected, onSelect, speech, onExpand, onPublicHistory, controlsBlocked, onSceneChange }: { onPublicHistory:()=>void; controlsBlocked:boolean; onSceneChange:(id:SceneId)=>void; world: World; selected: string; onSelect: (id: string) => void; speech: ChatTurn | null; onExpand: () => void }) {
   const viewport = useRef<HTMLDivElement>(null);
   const [renderReady,setRenderReady]=useState(false);
   const {player,pose:heroPose}=usePlayer(viewport,controlsBlocked,renderReady);
@@ -42,6 +42,7 @@ export default function TownScene({ world, selected, onSelect, speech, onExpand,
   const transform=sceneTransform(size,camera,sceneId);
   const speaker=world.npcs.find(n=>n.id===selected);
   const bubble=speaker && residentScene(speaker)===sceneId && speech ? bubblePlacement(poses[speaker.id]?.position ?? speaker.position,size,camera,{width:290,height:164},sceneId) : null;
+  const publicConversation=[...(world.conversations??[])].reverse().find(c=>c.sceneId===sceneId&&world.minute-c.minute<=20);
   const baseScale=sceneTransform(size,{zoom:1,x:0,y:0},sceneId).scale;
   function zoom(amount:number){setCamera(c=>boundedCamera({...c,zoom:c.zoom+(size.width>=600?Math.sign(amount)*.5/baseScale:amount)},size,sceneId));}
 
@@ -150,6 +151,17 @@ export default function TownScene({ world, selected, onSelect, speech, onExpand,
       <div className="speech-content" aria-live="polite"><div className="reply-heading"><strong>{speaker.name}</strong><span data-testid="reply-source" className={`source-badge ${speech.source}`}>{speech.source==="ai"?(speech.testMode?"AI · 本地测试替身":"AI 回复"):`降级回复 · ${FALLBACK_LABELS[speech.reason!] || "本地规则"}`}</span></div><p data-testid="chat-reply">{speech.reply}</p><small>{worldTime(speech.minute)} · {speech.worldRevision===world.revision?"本次状态":"历史发言 · 世界已更新"}</small><button onClick={onExpand}>展开全文与历史 ↗</button></div>
       <i className="bubble-tail" aria-hidden />
     </aside>}
+    {!bubble&&publicConversation?.turns.map((turn)=>{
+      const n=world.npcs.find(n=>n.id===turn.npcId&&n.sceneId===sceneId);if(!n)return null;
+      const place=bubblePlacement(poses[n.id]?.position??n.position,size,camera,{width:220,height:125},sceneId);if(!place)return null;
+      const other=world.npcs.find(other=>other.id!==n.id&&publicConversation.participants.includes(other.id));
+      const onLeft=(poses[n.id]?.position.x??n.position.x)<=(other?(poses[other.id]?.position.x??other.position.x):n.position.x);
+      const left=Math.max(12,Math.min(size.width-place.width-12,place.left+(onLeft?-70:70)));
+      const tail=Math.max(10,Math.min(place.width-10,place.tail+place.left-left));
+      return <aside key={turn.npcId} className="speech-bubble public-speech" data-testid={`public-bubble-${turn.npcId}`} style={{left,top:place.top,width:place.width,height:place.height,"--tail-x":`${tail}px`} as CSSProperties}>
+        <div className="speech-content"><div className="reply-heading"><strong>{n.name}</strong><small>{turn.source==="ai"?(turn.testMode?"AI·测试替身":"AI") : "本地交流"}</small></div><p>{turn.reply}</p><button onClick={onPublicHistory}>居民交流全文 ↗</button></div><i className="bubble-tail" aria-hidden />
+      </aside>;
+    })}
     <div className="player-controls" data-testid="player-controls">{portal?<strong data-testid="portal-hint">E · {portal.label}</strong>:<span>WASD / 方向键走动 · 靠近门口按 E</span>}<small>{sceneId==="town"?"点击地面控制化身 · 拖动平移 · 点击居民对话":"只显示此处的居民 · 下方出口返回对应门前"}</small></div>
   </div>;
 }

@@ -5,6 +5,7 @@ export function aiConfig(): AIConfig {
   const timeout = Number(process.env.AI_TIMEOUT_MS || 8000);
   return { enabled: process.env.AI_ENABLED === "true", key: process.env.AI_API_KEY || "", baseUrl: process.env.AI_BASE_URL || "", model: process.env.AI_MODEL || "", timeoutMs: Math.max(100, Math.min(10000, Number.isFinite(timeout) ? timeout : 8000)), testMode: process.env.AI_TEST_MODE === "true" };
 }
+const modelSlots=globalThis as typeof globalThis & {townActiveModels?:number};
 type Diagnostic = { source: "ai" | "fallback"; reason?: FallbackReason; elapsedMs: number; status?: number };
 export async function modelReply(messages: ModelMessage[], fallback: () => string, config = aiConfig(), transport: typeof fetch = fetch, diagnose: (event: Diagnostic) => void = event => console.info("npc_chat", event), reserveAttempt: () => Promise<boolean> = async () => true): Promise<ChatReply> {
   const start = Date.now();
@@ -21,7 +22,9 @@ export async function modelReply(messages: ModelMessage[], fallback: () => strin
     if (url.username || url.password || url.search || url.hash || (url.protocol !== "https:" && !(url.protocol === "http:" && loopback)) || (config.testMode && !loopback)) return degrade("invalid_config");
   } catch { return degrade("invalid_config"); }
   // Failed external attempts also consume quota; database errors fail closed.
-  if (!await reserveAttempt()) return degrade("budget_exhausted");
+  if((modelSlots.townActiveModels??0)>=2)return degrade("busy");
+  modelSlots.townActiveModels=(modelSlots.townActiveModels??0)+1;
+  try { if (!await reserveAttempt()){modelSlots.townActiveModels--;return degrade("budget_exhausted");} } catch(error){modelSlots.townActiveModels--;throw error;}
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), config.timeoutMs);
   try {
@@ -38,5 +41,5 @@ export async function modelReply(messages: ModelMessage[], fallback: () => strin
     // Treat model output only as plain text. No actions or database tools are exposed.
     return { reply: content.trim(), source: "ai", ...(config.testMode ? {testMode:true} : {}) };
   } catch { return degrade(controller.signal.aborted ? "timeout" : "network"); }
-  finally { clearTimeout(timer); }
+  finally { clearTimeout(timer);modelSlots.townActiveModels!--; }
 }

@@ -26,7 +26,7 @@ export function recordExperience(world:World,ids:string[],kind:ExperienceEvent["
     r.familiarity=Math.min(100,r.familiarity+(kind==="work"?3:1));r.trust=Math.min(100,r.trust+(kind==="work"?2:kind==="conversation"?1:0));r.lastEventId=e.id;r.lastMinute=e.minute;
   }
   // Keep facts referenced by current memories/relationships even after the public log scrolls away.
-  const references=new Set([...Object.values(data.memories).flat().map(m=>m.eventId),...data.relations.map(r=>r.lastEventId)]);
+  const references=new Set([...Object.values(data.memories).flat().map(m=>m.eventId),...data.relations.map(r=>r.lastEventId),...(world.conversations??[]).map(c=>c.eventId)]);
   data.facts=data.facts.filter((f,i)=>i>=data.facts.length-200||references.has(f.id));return e;
 }
 export function observeEncounters(world:World){

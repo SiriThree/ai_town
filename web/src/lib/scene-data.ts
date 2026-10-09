@@ -134,5 +134,6 @@ export function validScenePath(sceneId:SceneId,path:Point[]):boolean {
 
 export function portalSpawn(id:string,npcId:string):Point {
   const p=portalById(id);const known=p.npcSpawns[npcId];if(known)return {...known};
-  const slot=[...npcId].reduce((sum,c)=>sum+c.charCodeAt(0),0)%4;return {x:p.spawn.x+[-6,-2,2,6][slot],y:p.spawn.y};
+  const knownOffset:Record<string,number>={xiaoyu:-12,laolin:-4,muxi:4,xiaoman:12};
+  const slot=[...npcId].reduce((sum,c)=>sum+c.charCodeAt(0),0)%4;return {x:p.spawn.x+(knownOffset[npcId]??[-12,-4,4,12][slot]),y:p.spawn.y};
 }

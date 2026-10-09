@@ -53,7 +53,7 @@ export async function setWorldRunning(running: boolean, expectedRevision: number
   });
 }
 // A single short transaction serializes every world mutation. No model I/O runs here.
-async function updateWorld(id: string, change: (current: World, now: number) => World): Promise<World> {
+export async function updateWorld(id: string, change: (current: World, now: number) => World): Promise<World> {
   const client = await database().connect();
   try {
     await client.query("BEGIN");
