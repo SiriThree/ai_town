@@ -1,0 +1,22 @@
+CREATE TABLE IF NOT EXISTS town_worlds (
+    id text PRIMARY KEY, revision integer NOT NULL CHECK (revision >= 0),
+    payload jsonb NOT NULL, updated_at timestamptz NOT NULL DEFAULT now()
+  );
+
+CREATE TABLE IF NOT EXISTS town_chats (
+    world_id text NOT NULL REFERENCES town_worlds(id), npc_id text NOT NULL,
+    turns jsonb NOT NULL DEFAULT '[]', PRIMARY KEY(world_id, npc_id),
+    CHECK (jsonb_typeof(turns) = 'array' AND jsonb_array_length(turns) <= 20)
+  );
+
+CREATE TABLE IF NOT EXISTS town_chat_limits (
+    world_id text NOT NULL REFERENCES town_worlds(id), kind text NOT NULL CHECK (kind IN ('request','model')),
+    bucket bigint NOT NULL, used integer NOT NULL CHECK (used > 0), PRIMARY KEY(world_id,kind)
+  );
+
+CREATE TABLE IF NOT EXISTS town_private_chats (
+    world_id text NOT NULL REFERENCES town_worlds(id), npc_id text NOT NULL,
+    visitor_id text NOT NULL CHECK (visitor_id ~ '^[a-f0-9]{64}$'), turns jsonb NOT NULL DEFAULT '[]',
+    updated_at timestamptz NOT NULL DEFAULT now(), PRIMARY KEY(world_id,npc_id,visitor_id),
+    CHECK (jsonb_typeof(turns) = 'array' AND jsonb_array_length(turns) <= 20)
+  );

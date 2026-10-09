@@ -1,0 +1,50 @@
+{
+  "name": "morning-town-web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "next dev --hostname 127.0.0.1 --port 3100",
+    "build": "next build",
+    "start": "next start --hostname 127.0.0.1 --port 3100",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run tests",
+    "test:chat": "node --env-file=.env.test.local scripts/chat-check.mjs",
+    "test:db": "node --env-file=.env.test.local --import tsx scripts/test-db.ts",
+    "test:e2e": "node --env-file=.env.test.local scripts/browser-check.mjs",
+    "db:init": "node --env-file=.env.local --import tsx scripts/init-db.ts",
+    "db:init:test": "node --env-file=.env.test.local --import tsx scripts/init-db.ts",
+    "test:scene-chat": "node --env-file=.env.test.local scripts/scene-chat-check.mjs",
+    "test:v3:db": "node --env-file=.env.test.local --import tsx scripts/v3-db-check.ts",
+    "test:v3": "node --env-file=.env.test.local scripts/v3-browser-check.mjs",
+    "test:v4": "node --env-file=.env.test.local scripts/v4-scene-check.mjs",
+    "test:v42": "node --env-file=.env.test.local scripts/v42-motion-check.mjs",
+    "test:v51": "node --env-file=.env.test.local --import tsx scripts/v51-check.mjs",
+    "db:seed": "node --env-file=.env.local --import tsx scripts/seed-world.ts",
+    "test:v52": "node --env-file=.env.test.local --import tsx scripts/v52-private-check.mjs",
+    "test:v52:permissions": "node --env-file=.env.test.local --import tsx scripts/v52-permissions-check.mjs",
+    "test:v61": "node --env-file=.env.test.local scripts/v61-scene-check.mjs",
+    "test:v71": "node --env-file=.env.test.local scripts/v71-scene-check.mjs",
+    "test:v71:db": "node --env-file=.env.test.local --import tsx scripts/v71-db-check.ts"
+  },
+  "dependencies": {
+    "next": "16.4.0",
+    "pg": "8.23.1",
+    "pixi.js": "8.22.0",
+    "react": "19.3.0",
+    "react-dom": "19.3.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.64.0",
+    "@types/node": "26.6.4",
+    "@types/pg": "8.23.1",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "eslint": "9.39.5",
+    "eslint-config-next": "16.4.0",
+    "tsx": "4.23.15",
+    "typescript": "6.0.3",
+    "vitest": "5.0.3"
+  }
+}

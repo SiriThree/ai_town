@@ -1,0 +1,49 @@
+name: ai-town-production
+services:
+  db:
+    image: postgres:17-bookworm
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ai_town_mvp
+      POSTGRES_USER: town_prod
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set a new production password}
+    volumes:
+      - town_data:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U town_prod -d ai_town_mvp"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+  app:
+    build: {context: .., target: runner}
+    restart: unless-stopped
+    env_file: .env.production
+    environment:
+      PUBLIC_DEMO: "true"
+      HOSTNAME: 0.0.0.0
+      PORT: "3000"
+    depends_on:
+      db: {condition: service_healthy}
+    expose: ["3000"]
+  setup:
+    profiles: [maintenance]
+    build: {context: .., target: builder}
+    env_file: .env.production
+    command: [sh, -c, "node --import tsx scripts/init-db.ts && node --import tsx scripts/seed-world.ts"]
+    depends_on:
+      db: {condition: service_healthy}
+  proxy:
+    image: caddy:2
+    restart: unless-stopped
+    environment:
+      DEMO_DOMAIN: ${DEMO_DOMAIN:?Set the HTTPS domain}
+    ports: ["80:80", "443:443"]
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on: [app]
+volumes:
+  town_data:
+  caddy_data:
+  caddy_config:

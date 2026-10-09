@@ -1,0 +1,30 @@
+# Copy to .github/workflows/build-linux.yml only after review. No automatic push trigger or deploy.
+name: Build reviewed Linux bundle
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.14.1'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Build without production secrets
+        shell: bash
+        run: |
+          mkdir "$RUNNER_TEMP/town-builds"
+          bash deploy/ops/build-release.sh "$GITHUB_WORKSPACE/web" "$RUNNER_TEMP/town-builds"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ai-town-linux-x64
+          if-no-files-found: error
+          retention-days: 7
+          path: |
+            ${{ runner.temp }}/town-builds/town-build.*/ai-town-linux-x64.tar.gz
+            ${{ runner.temp }}/town-builds/town-build.*/ai-town-linux-x64.tar.gz.sha256

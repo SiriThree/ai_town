@@ -1,0 +1,34 @@
+[Unit]
+Description=AI Town standalone web and API
+After=network.target postgresql.service
+StartLimitIntervalSec=120
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=ai-town
+Group=ai-town
+WorkingDirectory=/srv/ai-town/current
+EnvironmentFile=/etc/ai-town/runtime.env
+# env arguments enforce these boundaries even if runtime.env accidentally contains duplicates.
+ExecStart=/usr/bin/env NODE_ENV=production PUBLIC_DEMO=true HOSTNAME=127.0.0.1 PORT=3100 NODE_OPTIONS=--max-old-space-size=768 /opt/ai-town/node/bin/node server.js
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+KillSignal=SIGTERM
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/srv/ai-town/cache
+MemoryHigh=1G
+MemoryMax=1536M
+TasksMax=64
+LimitNOFILE=8192
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=ai-town
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,19 @@
+# References, assignment originals, local evidence and secrets are not project delivery.
+/candidates/
+/references/
+/*.zip
+/*.docx
+/web/evidence/
+/deploy/out/
+**/node_modules/
+**/.next/
+**/.browsers/
+**/.env*
+!**/.env.example
+**/runtime.env
+**/*.dump
+**/*.dump.sha256
+**/*.tsbuildinfo
+**/__pycache__/
+**/playwright-report/
+**/test-results/

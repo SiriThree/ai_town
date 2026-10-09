@@ -1,0 +1,15 @@
+node_modules
+.next
+.browsers
+.env*
+evidence
+test-results
+playwright-report
+.git
+*.tsbuildinfo
+deploy/.env*
+deploy/backups
+
+runtime.env
+*.dump
+*.dump.sha256

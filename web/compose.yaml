@@ -1,0 +1,31 @@
+name: ai-town-selfbuilt
+services:
+  db:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: town_local
+      POSTGRES_PASSWORD: town_local_only
+      POSTGRES_DB: ai_town_mvp
+    ports: ["127.0.0.1:55487:5432"]
+    volumes: ["town_dev:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U town_local -d ai_town_mvp"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+  test-db:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: town_local
+      POSTGRES_PASSWORD: town_local_only
+      POSTGRES_DB: ai_town_mvp_test
+    ports: ["127.0.0.1:55488:5432"]
+    volumes: ["town_test:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U town_local -d ai_town_mvp_test"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+volumes:
+  town_dev:
+  town_test:

@@ -1,0 +1,12 @@
+node_modules/
+.next/
+.env*
+!.env.example
+*.tsbuildinfo
+playwright-report/
+test-results/
+.browsers/
+
+runtime.env
+*.dump
+*.dump.sha256
