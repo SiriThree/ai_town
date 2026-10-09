@@ -99,7 +99,7 @@ export function canStand(sceneId:SceneId,p:Point):boolean {
 export const npcCafeSpawn=(id:string):Point=>portalById("cafe-door").npcSpawns[id==="aning"?"aning":"aqing"];
 export const nearDoor=(sceneId:SceneId,p:Point)=>SCENES[sceneId].portals.some(door=>nearPortal(door,p));
 export function validScenePath(sceneId:SceneId,path:Point[]):boolean {
-  if(path.length<2||path.length>16)return false;
+  if(path.length<2||path.length>64)return false;
   for(let i=1;i<path.length;i++){
     const a=path[i-1],b=path[i];
     if(!Number.isFinite(a.x+a.y+b.x+b.y)||(a.x!==b.x&&a.y!==b.y))return false;

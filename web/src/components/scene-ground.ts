@@ -1,4 +1,4 @@
-import {TOWN_SIZE,TOWN_ROADS,TOWN_PLAZAS,mapContains} from "../lib/town-map";
+import {TOWN_SIZE,TOWN_ROADS,TOWN_PLAZAS,RIVER,BRIDGES,STEPS,mapContains} from "../lib/town-map";
 import { Texture, Sprite } from "pixi.js";
 import { ART_PIXEL } from "../lib/scene-motion";
 
@@ -18,7 +18,14 @@ export function drawGround() {
   for(let y=0;y<height;y++)for(let x=0;x<width;x++) {
     const h=hash(x,y),patch=hash(Math.floor(x/8),Math.floor(y/8))%5-2;
     let color:number[];
-    if(plaza(x,y)) {
+    if(BRIDGES.some(b=>mapContains(b,x*ART_PIXEL,y*ART_PIXEL))) {
+      color=y%5===0?[113,80,45]:[176+h%9,134+h%9,78+h%9];
+    } else if(mapContains(RIVER,x*ART_PIXEL,y*ART_PIXEL)) {
+      const bank=x*ART_PIXEL<RIVER.x+8||x*ART_PIXEL>RIVER.x+RIVER.w-8;
+      color=bank?[112,143,103]:h%37===0?[155,198,191]:[77+h%10,140+h%10,153+h%10];
+    } else if(STEPS.some(b=>mapContains(b,x*ART_PIXEL,y*ART_PIXEL))) {
+      color=y%5===0?[115,112,94]:y%5===1?[216,206,174]:[172,164,137];
+    } else if(plaza(x,y)) {
       const row=Math.floor((y-154)/7),col=(x-174+(row%2)*6)%13,iy=(y-154)%7;
       const wear=hash(Math.floor((x-174+(row%2)*6)/13),row)%13-6;
       color=iy===6||col===12?[158,155,130]:[191+wear,185+wear,156+wear];

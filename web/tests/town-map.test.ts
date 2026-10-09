@@ -20,7 +20,7 @@ describe("east district and stable world coordinates",()=>{
     expect(TOWN_SIZE.width).toBeGreaterThan(960);
   });
   it("has four independently paired entrances and unique indoor destinations",()=>{
-    const doors=PORTALS.filter(p=>p.source==="town");expect(doors).toHaveLength(TOWN_BUILDINGS.length);expect(new Set(doors.map(p=>p.target)).size).toBe(4);
+    const doors=PORTALS.filter(p=>p.source==="town");expect(doors).toHaveLength(4);expect(new Set(doors.map(p=>p.target)).size).toBe(4);
     for(const door of doors){const reverse=portalById(door.reverseId);expect(reverse.target).toBe("town");expect(reverse.reverseId).toBe(door.id);expect(canStand("town",reverse.spawn)).toBe(true);
       const p={...newPlayer(),position:door.position};const inside=enterPortal(p,door.id);expect(inside.sceneId).toBe(door.target);
       expect(canStand(inside.sceneId,inside.position)).toBe(true);expect(restorePlayer(inside)).toEqual(inside);expect(enterPortal(inside,reverse.id).position).toEqual(reverse.spawn);

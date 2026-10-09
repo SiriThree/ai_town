@@ -11,7 +11,8 @@ export function sceneTransform(view: Viewport, camera: Camera, sceneId:SceneId="
   // 2 world units per raster pixel: half-unit desktop scales give integer screen pixels.
   // Small touch viewports retain fitting so both residents remain reachable.
   const base=view.width>=600?Math.max(.5,Math.round(fit*2)/2):fit;
-  const scale=view.width>=600?Math.round(base*camera.zoom*2)/2:base*camera.zoom;
+  const requested=base*camera.zoom;
+  const scale=view.width>=600&&requested>=.5?Math.round(requested*2)/2:requested;
   return { scale, x: Math.round((view.width - MAP.width * scale) / 2 + camera.x), y: Math.round(view.height / 2 - (sceneId==="town"?270:310) * scale + camera.y) };
 }
 export function screenPoint(point: Point, view: Viewport, camera: Camera,sceneId:SceneId="town") {
@@ -20,14 +21,14 @@ export function screenPoint(point: Point, view: Viewport, camera: Camera,sceneId
 }
 // Bounds come from actual content dimensions; the old street remains the default camera anchor.
 export function boundedCamera(camera: Camera, view: Viewport,sceneId:SceneId="town"): Camera {
-  const minimumZoom=.5/sceneTransform(view,{zoom:1,x:0,y:0},sceneId).scale;
+  const minimumZoom=.25/sceneTransform(view,{zoom:1,x:0,y:0},sceneId).scale;
   const zoom=Math.max(minimumZoom,Math.min(2.5,camera.zoom)),t=sceneTransform(view,{zoom,x:0,y:0},sceneId),size=SCENES[sceneId].size;
   return {zoom,x:Math.max(Math.min(0,view.width*.7-t.x-size.width*t.scale),Math.min(Math.max(0,view.width*.3-t.x),camera.x)),
     y:Math.max(Math.min(0,view.height*.7-t.y-size.height*t.scale),Math.min(Math.max(0,view.height*.3-t.y),camera.y))};
 }
 export function overviewCamera(view:Viewport,sceneId:SceneId):Camera {
   const size=SCENES[sceneId].size,base=sceneTransform(view,{zoom:1,x:0,y:0},sceneId).scale;
-  const scale=Math.max(.5,Math.floor(Math.min(view.width/size.width,view.height/size.height)*2)/2);
+  const scale=Math.max(.25,Math.floor(Math.min(view.width/size.width,view.height/size.height)*4)/4);
   return {zoom:scale/base,x:(MAP.width-size.width)*scale/2,y:((sceneId==="town"?270:310)-size.height/2)*scale};
 }
 export function followPlayer(point:Point,view:Viewport,camera:Camera,sceneId:SceneId):Camera {

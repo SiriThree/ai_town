@@ -1,4 +1,4 @@
-import {TOWN_BUILDINGS,TOWN_FENCES,TOWN_FLOWERS,TOWN_TREES,TOWN_BENCHES,TOWN_LAMPS} from "../lib/town-map";
+import {TOWN_BUILDINGS,TOWN_FENCES,TOWN_FLOWERS,TOWN_TREES,TOWN_BENCHES,TOWN_LAMPS,BRIDGES} from "../lib/town-map";
 import districtFrames from "./district-frames.json";
 import { Assets, Container, Graphics, Rectangle, Sprite, Texture } from "pixi.js";
 import type { Npc } from "../lib/world";
@@ -8,11 +8,11 @@ import { drawGround } from "./scene-ground";
 
 // Original atlases; provenance: public/art/v4-1/ASSETS.md and v4-2/ASSETS.md.
 export async function loadSceneArt() {
-  const [town, aqing, aning, props, district] = await Promise.all([Assets.load<Texture>("/art/v4-1/town-atlas.png"), Assets.load<Texture>("/art/v4-2/aqing-walk.png"), Assets.load<Texture>("/art/v4-2/aning-walk.png"), Assets.load<Texture>("/art/v4-1/props-atlas.png"),Assets.load<Texture>("/art/v8-1/east-buildings.png")]);
-  town.source.scaleMode = aqing.source.scaleMode = aning.source.scaleMode = props.source.scaleMode = district.source.scaleMode = "nearest";
+  const [town, aqing, aning, props, district, expansion] = await Promise.all([Assets.load<Texture>("/art/v4-1/town-atlas.png"), Assets.load<Texture>("/art/v4-2/aqing-walk.png"), Assets.load<Texture>("/art/v4-2/aning-walk.png"), Assets.load<Texture>("/art/v4-1/props-atlas.png"),Assets.load<Texture>("/art/v8-1/east-buildings.png"),Assets.load<Texture>("/art/v8-2/buildings.png")]);
+  town.source.scaleMode = aqing.source.scaleMode = aning.source.scaleMode = props.source.scaleMode = district.source.scaleMode = expansion.source.scaleMode = "nearest";
   const crop=(t:Texture,x:number,y:number,w:number,h:number)=>new Texture({source:t.source,frame:new Rectangle(x,y,w,h)});
   const residentFrames=(t:Texture,layout:typeof frames.aqing)=>Object.fromEntries(Object.entries(layout).map(([direction,cells])=>[direction,cells.map(([x,y,w,h])=>crop(t,x,y,w,h))])) as Record<Pose["facing"],Texture[]>;
-  return {store:crop(district,...districtFrames.store as [number,number,number,number]),cottage:crop(district,...districtFrames.cottage as [number,number,number,number]),home:crop(town,45,39,548,545),cafe:crop(town,661,39,569,545),oak:crop(town,31,626,569,590),blossom:crop(town,650,643,573,573),
+  return {hall:crop(expansion,8,30,428,392),clinic:crop(expansion,470,82,391,337),library:crop(expansion,912,29,402,393),workshop:crop(expansion,1338,42,423,380),rose:crop(expansion,17,490,407,365),sage:crop(expansion,445,508,440,342),reed:crop(expansion,893,512,436,347),stone:crop(expansion,1342,432,416,424),store:crop(district,...districtFrames.store as [number,number,number,number]),cottage:crop(district,...districtFrames.cottage as [number,number,number,number]),home:crop(town,45,39,548,545),cafe:crop(town,661,39,569,545),oak:crop(town,31,626,569,590),blossom:crop(town,650,643,573,573),
     fountain:crop(props,149,31,540,417),bench:crop(props,868,83,484,338),lamp:crop(props,354,450,118,539),bed:crop(props,771,597,656,314),
     aqing:residentFrames(aqing,frames.aqing),aning:residentFrames(aning,frames.aning)};
 }
@@ -34,6 +34,7 @@ export function drawTown(art:Art):{ground:Container;objects:Container} {
   for(const {x,y:foot}of TOWN_BUILDINGS) {
     const y=foot-7,w=200;poly(g,[x-w/2,y-24,x+w/2,y-24,x+w/2+18,y+12,x-w/2+14,y+12],0x758459);
   }
+  for(const b of BRIDGES){fence(g,b.x,b.y-17,b.w);fence(g,b.x,b.y+b.h-4,b.w);}
   for(const [x,y,w]of TOWN_FENCES)fence(g,x,y,w);
   for(const [x,y,w]of TOWN_FLOWERS)objects.addChild(sprite(art.bed,x+w/2,y+15,w*314/656));
   for(let i=0;i<7;i++){rect(g,379+i*31,284+i%2*2,20,7,0xc7bc98);rect(g,380+i*31,284+i%2*2,17,2,0xe0d1a6);}
