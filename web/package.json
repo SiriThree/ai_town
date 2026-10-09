@@ -26,7 +26,9 @@
     "test:v52:permissions": "node --env-file=.env.test.local --import tsx scripts/v52-permissions-check.mjs",
     "test:v61": "node --env-file=.env.test.local scripts/v61-scene-check.mjs",
     "test:v71": "node --env-file=.env.test.local scripts/v71-scene-check.mjs",
-    "test:v71:db": "node --env-file=.env.test.local --import tsx scripts/v71-db-check.ts"
+    "test:v71:db": "node --env-file=.env.test.local --import tsx scripts/v71-db-check.ts",
+    "test:v72": "node --env-file=.env.test.local --import tsx scripts/v72-scene-check.mjs",
+    "test:v72:db": "node --env-file=.env.test.local --import tsx scripts/v72-db-check.ts"
   },
   "dependencies": {
     "next": "16.4.0",

@@ -18,7 +18,7 @@ export default function TownScene({ world, selected, onSelect, speech, onExpand,
   const [size, setSize] = useState({width:960,height:600});
   const [camera, setCamera] = useState<Camera>({zoom:1,x:0,y:0});
   const [poses,setPoses]=useState<Record<string,Pose>>(()=>Object.fromEntries(world.npcs.map(n=>[n.id,poseAt(stillAt(n.position),0)])));
-  const cameras=useRef<Record<SceneId,Camera>>({town:{zoom:1,x:0,y:0},cafe_interior:{zoom:1,x:0,y:0}});
+  const cameras=useRef<Record<SceneId,Camera>>({town:{zoom:1,x:0,y:0},cafe_interior:{zoom:1,x:0,y:0},home_interior:{zoom:1,x:0,y:0}});
   const cameraScene=useRef<SceneId>("town");
   useEffect(()=>{
     if(cameraScene.current!==sceneId){cameras.current[cameraScene.current]=camera;cameraScene.current=sceneId;setCamera(cameras.current[sceneId]);}
@@ -51,7 +51,7 @@ export default function TownScene({ world, selected, onSelect, speech, onExpand,
     let ready = false;
     let animationFrame=0;
     async function start() {
-      const [{ Application }, { drawTown, drawResident, loadSceneArt },{loadPlayerArt,drawPlayer,drawCafe}] = await Promise.all([import("pixi.js"), import("./scene-art"),import("./player-art")]);
+      const [{ Application }, { drawTown, drawResident, loadSceneArt },{loadPlayerArt,drawPlayer,drawInterior}] = await Promise.all([import("pixi.js"), import("./scene-art"),import("./player-art")]);
       const [art,playerArt]=await Promise.all([loadSceneArt(),loadPlayerArt()]);
       if (cancelled) return;
       localApp = new Application();
@@ -70,11 +70,11 @@ export default function TownScene({ world, selected, onSelect, speech, onExpand,
       const mountScene=()=>{
         for(const child of localApp!.stage.removeChildren())child.destroy({children:true});
         actors.clear();motions.clear();activeScene=latest.current.sceneId;
-        const {ground,objects}=activeScene==="town"?drawTown(art):drawCafe(playerArt);
+        const {ground,objects}=activeScene==="town"?drawTown(art):drawInterior(playerArt,activeScene);
         localApp!.stage.addChild(ground,objects);sceneObjects=objects;
         const current=latest.current;
         for(const n of current.world.npcs.filter(n=>residentScene(n)===activeScene)){
-          const actor=drawResident(n,current.selected===n.id,art);actors.set(n.id,actor);motions.set(n.id,stillAt(n.position,"south",n.sceneId));objects.addChild(actor.node);
+          const actor=drawResident(n,current.selected===n.id,art);actors.set(n.id,actor);motions.set(n.id,stillAt(n.position,n.facing??"south",n.sceneId));objects.addChild(actor.node);
         }
         hero=drawPlayer(playerArt);hero.update(current.heroPose);objects.addChild(hero.node);
         localApp!.canvas.setAttribute("aria-label",SCENES[activeScene].name+"游戏场景");
@@ -105,7 +105,7 @@ export default function TownScene({ world, selected, onSelect, speech, onExpand,
         }
         for(const n of nextWorld.npcs.filter(n=>residentScene(n)===activeScene&&!actors.has(n.id))){
           const actor=drawResident(n,latest.current.selected===n.id,art);actors.set(n.id,actor);
-          motions.set(n.id,stillAt(n.position,"south",n.sceneId));sceneObjects.addChild(actor.node);membershipChanged=true;
+          motions.set(n.id,stillAt(n.position,n.facing??"south",n.sceneId));sceneObjects.addChild(actor.node);membershipChanged=true;
         }
         if(membershipChanged){setPoses(Object.fromEntries([...motions].map(([id,m])=>[id,poseAt(m,now)])));localApp!.render();host.current!.dataset.objects=String(sceneObjects.children.length);}
         nextWorld.npcs.filter(n=>motions.has(n.id)).forEach(n=>motions.set(n.id,acceptPosition(motions.get(n.id)!,n,now)));
@@ -134,7 +134,7 @@ export default function TownScene({ world, selected, onSelect, speech, onExpand,
       {SCENES[sceneId].portals.map(p=><span key={p.id} className={`door-marker ${portal?.id===p.id?"near":""}`} style={{left:p.position.x,top:p.position.y}} aria-hidden>◇</span>)}
     </div>
     {error && <p role="alert" className="scene-error">{error}</p>}
-    <div className="map-caption"><span>{sceneId==="town"?"晨露村手记":"麦香咖啡馆"}</span><small>{sceneId==="town"?"沿街散步，去喝杯咖啡。":"木香与咖啡 · 独立室内场景"}</small></div>
+    <div className="map-caption"><span>{SCENES[sceneId].name}</span><small>{sceneId==="town"?"沿街散步，去喝杯咖啡。":sceneId==="home_interior"?"暖灯与木香 · 居民的家":"木香与咖啡 · 独立室内场景"}</small></div>
     <div className="camera-tools" aria-label="地图镜头"><button aria-label="缩小地图" disabled={camera.zoom<=1} onClick={()=>zoom(-.25)}>−</button><output aria-label="地图缩放">{Math.round(transform.scale/baseScale*100)}%</output><button aria-label="放大地图" disabled={camera.zoom>=2} onClick={()=>zoom(.25)}>＋</button><button onClick={()=>setCamera({zoom:1,x:0,y:0})}>复位</button></div>
     {bubble && speaker && speech && <aside className="speech-bubble" data-testid="speech-bubble" data-npc={speaker.id} aria-label={`${speaker.name}的发言`} style={{left:bubble.left,top:bubble.top,width:bubble.width,height:bubble.height,"--tail-x":`${bubble.tail}px`} as CSSProperties}>
       <div className="speech-content" aria-live="polite"><div className="reply-heading"><strong>{speaker.name}</strong><span data-testid="reply-source" className={`source-badge ${speech.source}`}>{speech.source==="ai"?(speech.testMode?"AI · 本地测试替身":"AI 回复"):`降级回复 · ${FALLBACK_LABELS[speech.reason!] || "本地规则"}`}</span></div><p data-testid="chat-reply">{speech.reply}</p><small>{worldTime(speech.minute)} · {speech.worldRevision===world.revision?"本次状态":"历史发言 · 世界已更新"}</small><button onClick={onExpand}>展开全文与历史 ↗</button></div>

@@ -419,3 +419,22 @@ $env:EVIDENCE_DIR='evidence/v4-2/accepted'; npm run test:v42
 [22.52秒实际录屏](evidence/v4-2/accepted/automatic-walking.webm)：1440×900、25fps，包含真实HTTP Fallback、自动推进、行走、暂停、镜头与连续手动推进。视频来自隔离世界的真实运行，不是概念图或预制动画。
 
 改动：`TownScene.tsx`、`scene-art.ts`、`scene-view.ts`、`globals.css`；新增 `scene-motion.ts`、`scene-ground.ts`、`resident-frames.json`、`scene-motion.test.ts`、`v42-motion-check.mjs`、`public/art/v4-2/*`；补充 `scene-view.test.ts`、npm `test:v42`，增量更新AGENTS/spec/本说明。完整哈希清单见 `evidence/v4-2/changes-and-safety.json`。原3100服务已重启并保留配置，世界版本44前后完全一致且暂停，证据在 `live-restart-result.json`。没有后台/存档协议变更、新依赖、模型功能、扩图、部署或下一阶段工作；本轮停止。
+
+
+## V7.2：暖灯小屋与共享门户（2026-10-09）
+
+在原项目运行：`cd web` → `npm run dev`；已有生产构建可用 `npm run start`（127.0.0.1:3100）。数据库和环境变量不变，不执行初始化或重置已有世界。
+
+玩家点击地面聚焦，用 WASD/方向键走到左侧暖灯小屋门口，看到提示后按 E 进入；室内下方门口按 E 返回。右侧咖啡馆原有入口仍可用。住宅有两张床、书桌、衣柜、壁炉、墙窗与碰撞，NPC和玩家均不能穿家具；玩家位置仍只保存在当前标签页 sessionStorage。
+
+两名居民共用既有住宅，各有床边站位。低精力仍触发回家需求：走到室外门口 → 下一步进入 → 沿保存的室内路径走到床边 → 再下一步休息（精力+40，世界自然消耗仍是每步−6）。床边精力不足65且饥饿低于85时继续恢复，随后重新按需求/性格决策，先走到出口再返回室外。没有固定进出时间表，没有躺床动画；以真实休息行动和面向床的待机表达。
+
+`src/lib/scene-data.ts` 是不依赖 Pixi/DOM 的共享定义：`PORTALS` 描述来源、目标、反向门户、交互半径、玩家/NPC出生点，`BUILDINGS` 将业务地点与建筑实际场景关联，`HOME_REST/homePath` 只描述两条合法床边路线。`world.ts` 复用进入/离开校验与执行；`player-scene.ts` 复用同一门户；`scene-motion.ts` 仅表现后台保存的同场景路径，跨场景直接在合法出生点显示，不在不同坐标系间插值。
+
+仍使用 schemaVersion 2 JSON，不改表、不迁移聊天数据。读取v1时仅补town；旧v2住宅门廊坐标原样保留室外，下次需要回家先补走到新门口。新增可选 `facing` 和 `home_interior`，旧代码不能读取新住宅室内存档，回退代码时必须使用匹配的备份，不能直接将新存档交给V7.1读取。恢复基线提交：`2a0d7a98804efa3624b5d0fa098a5a33204775e0`。
+
+验证：`npm run typecheck`、`npm run lint`、`npm test`、`npm run build`；新 `npm run test:v72` 使用3114端口和55488专用测试库/随机世界ID，明确禁用AI；`npm run test:v72:db` 做真实库兼容/并发验证。仅在无人运行其他测试时，可用 `npm run test:v72:db -- --restart-test-postgres`，它先验证固定测试容器、55488映射与town_test卷，再重启该测试PostgreSQL；不重启55487开发库、不删卷。脚本不适用于生产库。
+
+本轮85单元测试、生产构建及浏览器回归通过；实际数据库重启、后端重启、两种桌面分辨率、私聊隔离和模型替身故障回归见 [V7.2 验证记录](../docs/v7-2-validation.md)。真实外部模型本轮未调用。家具为本轮原创生成图集，帧与使用限制见 [资产说明](public/art/v7-2/ASSETS.md)。未复制本地参考项目资源。
+
+新增第三栋建筑需要补对应场景/美术/碰撞、成对门户及安全出生点，再将目的地与已有或新授权的需求动作关联，增加室内活动点/路线和存档校验测试。玩家进出、NPC进入/离开、事务和角色渲染循环可直接复用；当前没有任意家具自动寻路或通用场景插件系统。

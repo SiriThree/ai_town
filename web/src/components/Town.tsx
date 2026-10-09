@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import TownScene from "./TownScene";
 import SceneChat from "./ChatDialog";
-import type { SceneId } from "../lib/player-scene";
+import { SCENES, type SceneId } from "../lib/player-scene";
 import type { ChatTurn } from "../lib/chat-types";
 import {npcPlace, runState, FOOD_AMOUNT, worldTime, type World } from "../lib/world";
 
@@ -132,7 +132,7 @@ export default function Town() {
     </header>
     <div className="status-line"><p role="status">{error || syncError || message}</p><span>网页打开时自动推进 · 无离线补算</span>{error && <button disabled={pending} onClick={reload}>重新读取</button>}</div>
     {world ? <>
-      <section className={`scene-frame ${sceneId==="cafe_interior"?"interior":""}`}>
+      <section className={`scene-frame ${sceneId!=="town"?"interior":""}`}>
         <TownScene controlsBlocked={panel!==null||(historyOpen&&!!present)} onSceneChange={setSceneId} world={world} selected={selected} onSelect={select} speech={chatOpen && speech?.npcId===selected ? speech.turn : null} onExpand={()=>setHistoryOpen(true)} />
         <div className="interaction-dock" hidden={!present}>
         {npc && <div className="resident-care" aria-label="居民干预" onPointerDown={e=>e.stopPropagation()} onKeyDown={e=>e.stopPropagation()}>
@@ -153,7 +153,7 @@ export default function Town() {
         </aside>}
       </section>
       <section className="town-bottom">
-        <div className="residents"><small>今日居民</small><div>{world.npcs.map(n => <button key={n.id} disabled={n.sceneId!==sceneId} aria-pressed={selected===n.id} onClick={() => select(n.id)}><span className={`resident-dot ${n.id}`} />{n.name}<span className="resident-action">{n.sceneId!==sceneId?(n.sceneId==="town"?"室外":"咖啡馆内"):n.action}</span></button>)}</div></div>
+        <div className="residents"><small>今日居民</small><div>{world.npcs.map(n => <button key={n.id} disabled={n.sceneId!==sceneId} aria-pressed={selected===n.id} onClick={() => select(n.id)}><span className={`resident-dot ${n.id}`} />{n.name}<span className="resident-action">{n.sceneId!==sceneId?SCENES[n.sceneId].name:n.action}</span></button>)}</div></div>
         <div className="latest"><div className="latest-title"><h2>街角近况</h2><button onClick={() => setPanel("log")}>打开日志 <span aria-hidden>↗</span></button></div><div data-testid="latest-events">{world.events.length ? world.events.slice(-2).map(e => <p key={e.id}><time>{worldTime(e.minute).split(" · ")[1]}</time>{e.text}</p>) : <p className="muted">清晨的小镇刚刚醒来，日常将在下一步发生。</p>}</div></div>
       </section>
       <footer><span>共享存档：所有访客可推进、暂停和送食物。</span><span data-testid="revision">存档版本 {world.revision}</span></footer>

@@ -7,7 +7,7 @@ import path from "node:path";
 process.env.PLAYWRIGHT_BROWSERS_PATH=path.resolve(".browsers");
 const {chromium,expect}=await import("@playwright/test");
 if(new URL(process.env.DATABASE_URL||"").pathname!=="/ai_town_mvp_test")throw new Error("仅允许隔离测试库");
-const dir="evidence/v7-1/browser",base="http://127.0.0.1:3113",worldId=`v71-browser-${randomUUID()}`;
+const dir=process.env.EVIDENCE_DIR||"evidence/v7-1/browser",base="http://127.0.0.1:3113",worldId=`v71-browser-${randomUUID()}`;
 await mkdir(dir,{recursive:true});const log=createWriteStream(`${dir}/server.log`,{flags:"a"});
 let server,browser,a,b,context,other,video;const checks=[],errors=[],screenshots=[],snapshots=[];
 const delay=ms=>new Promise(r=>setTimeout(r,ms));

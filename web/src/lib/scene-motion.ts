@@ -1,11 +1,11 @@
-import type { SceneId } from "./scene-data";
+import { validScenePath, type SceneId } from "./scene-data";
 import { MAP, type Npc, type Point } from "./world";
 
 export const ART_PIXEL = 2;
 export const RESIDENT_HEIGHT = 64;
 export type Facing = "south" | "west" | "east" | "north";
 export type Pose = { position:Point; facing:Facing; moving:boolean; frame:number };
-export type Motion = { sceneId:SceneId; target:Point; points:Point[]; startedAt:number; duration:number; facing:Facing };
+export type Motion = { sceneId:SceneId; target:Point; points:Point[]; startedAt:number; duration:number; facing:Facing; idleFacing?:Facing };
 const same=(a:Point,b:Point)=>a.x===b.x&&a.y===b.y;
 const distance=(a:Point,b:Point)=>Math.abs(a.x-b.x)+Math.abs(a.y-b.y);
 const direction=(a:Point,b:Point):Facing=>a.x!==b.x?(b.x>a.x?"east":"west"):(b.y>a.y?"south":"north");
@@ -29,16 +29,16 @@ function sample(m:Motion,now:number) {
 }
 export function poseAt(m:Motion,now:number):Pose {
   const p=sample(m,now);
-  return {position:{x:snapPixel(p.position.x),y:snapPixel(p.position.y)},facing:p.facing,moving:p.moving,frame:p.moving?[0,1,0,2][Math.floor(Math.max(0,now-m.startedAt)/140)%4]:0};
+  return {position:{x:snapPixel(p.position.x),y:snapPixel(p.position.y)},facing:!p.moving&&m.idleFacing?m.idleFacing:p.facing,moving:p.moving,frame:p.moving?[0,1,0,2][Math.floor(Math.max(0,now-m.startedAt)/140)%4]:0};
 }
 // Accept only the current backend's actual corridor path; never synthesize a detour.
-export function acceptPosition(m:Motion,npc:Pick<Npc,"position"|"lastPath"> & {sceneId?:SceneId},now:number):Motion {
+export function acceptPosition(m:Motion,npc:Pick<Npc,"position"|"lastPath"> & {sceneId?:SceneId;facing?:Facing},now:number):Motion {
   const sceneId=npc.sceneId??"town";
-  if(sceneId!==m.sceneId)return stillAt(npc.position,"south",sceneId);
-  if(same(m.target,npc.position))return m; // polling, selection, feeding and run toggles do not replay a path
+  if(sceneId!==m.sceneId)return stillAt(npc.position,npc.facing??"south",sceneId);
+  if(same(m.target,npc.position))return npc.facing?{...m,idleFacing:npc.facing}:m; // polling, selection, feeding and run toggles do not replay a path
   const p=npc.lastPath;
   const expected=[m.target,{x:m.target.x,y:MAP.roadY},{x:npc.position.x,y:MAP.roadY},npc.position];
-  if(p.length!==4||p.some((point,i)=>!same(point,expected[i])||!Number.isFinite(point.x)||!Number.isFinite(point.y)||point.x<0||point.x>MAP.width||point.y<0||point.y>MAP.height))return stillAt(npc.position,"south",sceneId);
+  if(sceneId==="town" ? p.length!==4||p.some((point,i)=>!same(point,expected[i])||!Number.isFinite(point.x)||!Number.isFinite(point.y)||point.x<0||point.x>MAP.width||point.y<0||point.y>MAP.height) : !validScenePath(sceneId,p)||!same(p[0],m.target)||!same(p.at(-1)!,npc.position))return stillAt(npc.position,"south",sceneId);
   const current=sample(m,now);
   // Rapid manual commits keep the unplayed old route, then the newly committed route.
   // There is no extrapolation, independent simulation or unbounded offline queue.

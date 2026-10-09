@@ -1,3 +1,4 @@
+import { HOME_REST } from "../src/lib/scene-data";
 import { describe, it, expect } from "vitest";
 import { advanceWorld, assertWorld, canExecute, createWorld, decide, execute, positionAt, roadPath, type LocationId } from "../src/lib/world";
 
@@ -53,7 +54,7 @@ describe("可解释的居民行为", () => {
     expect([read.energy,read.mood]).toEqual([88,100]);
     const social=execute(n,{action:{kind:"socialize"},reason:"测试"},w);
     expect([social.energy,social.mood]).toEqual([84,100]);
-    n.location="home";n.position=positionAt("home",n.id);
+    n.location="home";n.sceneId="home_interior";n.position=HOME_REST[n.id].position;
     const rest=execute(n,{action:{kind:"rest"},reason:"测试"},w);
     expect([rest.energy,rest.mood]).toEqual([100,99]);
   });

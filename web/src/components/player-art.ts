@@ -1,14 +1,15 @@
 import { Assets,Container,Graphics,Rectangle,Sprite,Texture } from "pixi.js";
 import type { Pose } from "../lib/scene-motion";
-import { CAFE_FURNITURE } from "../lib/player-scene";
+import { CAFE_FURNITURE, HOME_FURNITURE, type SceneId } from "../lib/scene-data";
 import playerFrames from "./player-frames.json";
+import homeFrames from "./home-frames.json";
 import cafeFrames from "./cafe-frames.json";
 export async function loadPlayerArt(){
-  const [player,cafe]=await Promise.all([Assets.load<Texture>("/art/v6-1/player-walk.png"),Assets.load<Texture>("/art/v6-1/cafe-furniture.png")]);
-  player.source.scaleMode=cafe.source.scaleMode="nearest";
+  const [player,cafe,home]=await Promise.all([Assets.load<Texture>("/art/v6-1/player-walk.png"),Assets.load<Texture>("/art/v6-1/cafe-furniture.png"),Assets.load<Texture>("/art/v7-2/home-furniture.png")]);
+  player.source.scaleMode=cafe.source.scaleMode=home.source.scaleMode="nearest";
   const crop=(t:Texture,[x,y,w,h]:number[])=>new Texture({source:t.source,frame:new Rectangle(x,y,w,h)});
   return {player:Object.fromEntries(Object.entries(playerFrames).map(([key,frames])=>[key,frames.map(f=>crop(player,f))])) as Record<Pose["facing"],Texture[]>,
-    furniture:Object.fromEntries(Object.entries(cafeFrames).map(([key,frame])=>[key,crop(cafe,frame)])) as Record<keyof typeof cafeFrames,Texture>};
+    furniture:Object.fromEntries([...Object.entries(cafeFrames).map(([key,frame])=>[key,crop(cafe,frame)]),...Object.entries(homeFrames).map(([key,frame])=>[key,crop(home,frame)])]) as Record<keyof typeof cafeFrames|keyof typeof homeFrames,Texture>};
 }
 type Art=Awaited<ReturnType<typeof loadPlayerArt>>;
 export function drawPlayer(art:Art){
@@ -27,7 +28,8 @@ export function drawPlayer(art:Art){
   }};
 }
 const box=(g:Graphics,x:number,y:number,w:number,h:number,color:number)=>g.rect(x,y,w,h).fill(color);
-export function drawCafe(art:Art){
+export function drawInterior(art:Art,sceneId:Exclude<SceneId,"town">){
+  const home=sceneId==="home_interior";
   const ground=new Container(),objects=new Container();objects.sortableChildren=true;
   const g=new Graphics();ground.addChild(g);
   box(g,0,0,960,600,0x30332d);box(g,162,102,648,438,0x24251f);
@@ -41,8 +43,8 @@ export function drawCafe(art:Art){
     for(let i=0;i<4;i++){const xx=left+8+i*18;if(xx+10<right)box(g,xx,y+6+(i%2)*4,10,2,0x8c633e);}
   }
   // Stone service floor at the rear, and a woven runner down the unobstructed centre.
-  for(let y=150;y<260;y+=22)for(let x=170;x<790;x+=24){box(g,x,y,22,20,(x+y)%3?0xc0ab87:0xb5a07c);box(g,x,y,22,2,0xd0bc98);}
-  box(g,426,308,110,152,0x69573d);box(g,430,310,102,148,0xa76240);box(g,436,316,90,136,0xc49c65);
+  if(!home)for(let y=150;y<260;y+=22)for(let x=170;x<790;x+=24){box(g,x,y,22,20,(x+y)%3?0xc0ab87:0xb5a07c);box(g,x,y,22,2,0xd0bc98);}
+  box(g,426,308,110,152,0x69573d);box(g,430,310,102,148,home?0x536747:0xa76240);box(g,436,316,90,136,home?0x9baf78:0xc49c65);
   for(let y=320;y<446;y+=12){box(g,442,y,78,2,0x906b48);for(let x=446;x<518;x+=14)box(g,x,y+4,4,4,0x8a7950);}
   box(g,160,100,640,52,0x59442f);box(g,170,106,620,42,0xe0c69b);
   for(let x=176;x<790;x+=32)box(g,x,110,2,30,0xd4b788);
@@ -56,7 +58,7 @@ export function drawCafe(art:Art){
   box(g,160,518,280,12,0x765338);box(g,520,518,280,12,0x765338);box(g,160,518,280,3,0xbd985f);box(g,520,518,280,3,0xbd985f);
   box(g,440,502,80,24,0xd4b789);box(g,444,506,72,12,0x806848);
   for(let x=448;x<516;x+=8)box(g,x,507,2,9,0xa39064);
-  for(const f of CAFE_FURNITURE){
+  for(const f of home?HOME_FURNITURE:CAFE_FURNITURE){
     const shadow=new Graphics();shadow.ellipse(f.x+4,f.y+2,f.width*.47,8).fill({color:0x3b3227,alpha:.23});ground.addChild(shadow);
     const s=new Sprite(art.furniture[f.kind]);s.anchor.set(.5,1);s.position.set(f.x,f.y);s.width=f.width;s.height=Math.round(f.width*s.texture.height/s.texture.width/2)*2;s.zIndex=f.y;objects.addChild(s);
   }

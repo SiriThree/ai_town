@@ -1,7 +1,7 @@
 import type { Point, Npc } from "./world";
 import type { Facing, Pose } from "./scene-motion";
 
-import { SCENES,canStand,type SceneId } from "./scene-data";
+import { SCENES,PORTALS,canStand,type SceneId } from "./scene-data";
 export {SCENES,CAFE_FURNITURE,canStand,PLAYER_RADIUS,type SceneId,type Furnishing} from "./scene-data";
 export type Player = { version:1; sceneId:SceneId; position:Point; facing:Facing };
 export const PLAYER_KEY="morning-town:player:v1";
@@ -9,11 +9,12 @@ export const PLAYER_SPEED=132;
 export const newPlayer=():Player=>({version:1,sceneId:"town",position:{x:620,y:370},facing:"south"});
 export function restorePlayer(value:unknown):Player {
   const v=value as Partial<Player>|null;
-  if(v?.version!==1 || (v.sceneId!=="town"&&v.sceneId!=="cafe_interior"))return newPlayer();
+  if(v?.version!==1 || (!v.sceneId||!Object.hasOwn(SCENES,v.sceneId)))return newPlayer();
   const facing:Facing=["north","south","west","east"].includes(v.facing||"")?v.facing!:"south";
   const position=v.position;
   if(position&&canStand(v.sceneId,position))return {version:1,sceneId:v.sceneId,position:{...position},facing};
-  return v.sceneId==="cafe_interior"?{version:1,sceneId:v.sceneId,position:{x:480,y:486},facing:"north"}:newPlayer();
+  const entrance=PORTALS.find(p=>p.source==="town"&&p.target===v.sceneId);
+  return entrance?{version:1,sceneId:v.sceneId,position:{...entrance.spawn},facing:entrance.facing}:newPlayer();
 }
 export function movePlayer(player:Player,dx:number,dy:number,seconds:number):Player {
   if(!dx&&!dy)return player;

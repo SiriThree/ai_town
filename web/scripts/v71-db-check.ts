@@ -4,7 +4,7 @@ import {mkdir,writeFile} from "node:fs/promises";
 import {database,readWorld,initializeWorld,tickWorld,setWorldRunning,wakeWorld} from "../src/lib/store";
 import {advanceWorld,createWorld,restoreWorld} from "../src/lib/world";
 if(new URL(process.env.DATABASE_URL||"").pathname!=="/ai_town_mvp_test")throw new Error("仅允许隔离测试库");
-const id=`v71-${randomUUID()}`,legacyId=id+"-legacy",dir="evidence/v7-1/database",checks:string[]=[];
+const id=`v71-${randomUUID()}`,legacyId=id+"-legacy",dir=process.env.EVIDENCE_DIR||"evidence/v7-1/database",checks:string[]=[];
 await mkdir(dir,{recursive:true});
 try{
   const legacy=JSON.parse(JSON.stringify(createWorld()));legacy.schemaVersion=1;legacy.revision=57;legacy.minute=960;
