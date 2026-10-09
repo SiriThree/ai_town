@@ -20,10 +20,21 @@ async function start(){
 async function stop(){const child=server;server=null;if(child&&child.exitCode===null&&!child.signalCode)await new Promise(r=>{child.once("exit",r);child.kill();});}
 async function shot(name,page=a){await page.screenshot({path:`${dir}/${name}.png`,fullPage:true});screenshots.push(name);}
 async function move(page,axis,target){
-  await page.getByTestId("scene-viewport").focus();const value=Number(await page.getByTestId("player").getAttribute(`data-${axis}`)),positive=target>value;
-  if(Math.abs(target-value)<=3)return;
-  const key=axis==="x"?(positive?"d":"a"):(positive?"s":"w");await page.keyboard.down(key);
-  try{await page.waitForFunction(({axis,target,positive})=>{const value=Number(document.querySelector('[data-testid="player"]').dataset[axis]);return positive?value>=target-2:value<=target+2;},{axis,target,positive},{timeout:30000});}catch(error){console.error({axis,target,value,actual:await page.getByTestId("player").getAttribute(`data-${axis}`)});throw error;}finally{await page.keyboard.up(key);}
+  await page.getByTestId("scene-viewport").focus();
+  const value=()=>page.getByTestId("player").getAttribute(`data-${axis}`).then(Number);
+  let current=await value();
+  if(Math.abs(target-current)>12){
+    const positive=target>current,key=axis==="x"?(positive?"d":"a"):(positive?"s":"w");await page.keyboard.down(key);
+    try{await page.waitForFunction(({axis,target,positive})=>{const v=Number(document.querySelector('[data-testid="player"]').dataset[axis]);return positive?v>=target-10:v<=target+10;},{axis,target,positive},{timeout:30000});}finally{await page.keyboard.up(key);}
+  }
+  // Browser keyup crosses a process boundary. Brake and correct at a turn rather than
+  // carrying a several-pixel overshoot into the next narrow corridor. No position writes.
+  for(let i=0;i<30;i++){
+    current=await value();if(Math.abs(target-current)<=1.7)return;
+    const positive=target>current,key=axis==="x"?(positive?"d":"a"):(positive?"s":"w");
+    await page.keyboard.down(key);await delay(8);await page.keyboard.up(key);await delay(16);
+  }
+  throw Error(`keyboard alignment ${axis}: target ${target}, actual ${await value()}`);
 }
 async function enter(page,scene){await page.getByTestId("scene-viewport").focus();await page.keyboard.press("e");await expect(page.getByTestId("scene-canvas")).toHaveAttribute("data-scene",scene);}
 
@@ -46,7 +57,11 @@ try{
     await move(a,"y",380);await move(a,"y",486);await enter(a,"town");
     for(let repeat=0;repeat<2;repeat++){await enter(a,id+"_interior");assert.equal(await a.getByTestId("scene-canvas").getAttribute("data-objects"),objects);await enter(a,"town");}
   }
-  await walkTo({x:1158,y:324});await enter(a,"store_interior");await enter(a,"town");
+  // Return via authored road centres, not a shortest-path zigzag brushing a shop lamp.
+  const returnRoute=[{x:2530,y:1234},{x:2530,y:1300},{x:2700,y:1300},{x:2700,y:582},{x:1610,y:582},{x:1610,y:600},{x:1510,y:600},{x:1510,y:580},{x:1030,y:580},{x:1030,y:370},{x:1158,y:370},{x:1158,y:324}];
+  assert.ok((await import("../src/lib/scene-data.ts")).validScenePath("town",returnRoute));
+  for(const p of returnRoute.slice(1)){await move(a,"x",p.x);await move(a,"y",p.y);}
+  await enter(a,"store_interior");await enter(a,"town");
   assert.deepEqual(await world(),initial);checks.push("actual keyboard walk from original street across steps and river bridge to all twelve room types; actual movement, repeated enters/exits and stable scene object counts; original store portal intact");
   await a.setViewportSize({width:1366,height:768});await a.getByRole("button",{name:"全景",exact:true}).click();await shot("02-full-town-1366");
   assert.deepEqual(errors,[]);await context.close();context=null;await rename(await video.path(),`${dir}/interior-walk.webm`);

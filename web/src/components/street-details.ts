@@ -1,5 +1,6 @@
+import {DISTRICT_PROPS,riverBanks,protectedFloor} from "../lib/town-landscape";
 import {Container,Graphics} from "pixi.js";
-import {GARDEN_EDGES,STREET_PROPS,SHORE_ROCKS,type StreetProp} from "../lib/town-dressing";
+import {GARDEN_EDGES,STREET_PROPS,type StreetProp} from "../lib/town-dressing";
 const box=(g:Graphics,x:number,y:number,w:number,h:number,c:number)=>g.rect(x,y,w,h).fill(c);
 
 // Original small pixel props. Two world units per base pixel, upper-left daylight.
@@ -29,7 +30,8 @@ function prop(p:StreetProp){
 export function addStreetDetails(objects:Container){
   // Hand-authored rocky northern banks. Uneven shelves, moss and reeds break the canal edge.
   // All stones are outside the existing water-crossing corridor y542..622.
-  for(const [x,y,wide]of SHORE_ROCKS){
+  const riverRocks=Array.from({length:28},(_,i)=>{const y=35+i*55+Math.round(Math.sin(i*2.3)*19),b=riverBanks(y);return [i%2?b.right+6:b.left-5,y,14+(i*7)%16];}).filter(([x,y,w])=>!protectedFloor(x,y,w+4));
+  for(const [x,y,wide]of riverRocks){
     const g=new Graphics();g.zIndex=y;g.position.set(Math.round(x/2)*2,Math.round(y/2)*2);
     g.poly([-wide,0,-wide+6,-16,-12,-22,6,-18,wide-2,-10,wide,4,12,10,-13,8]).fill(0x58604b);
     g.poly([-wide+2,-6,-wide+8,-20,-10,-27,8,-23,wide,-13,wide-2,-5,10,2,-9,0]).fill(0x8a8c70);
@@ -40,7 +42,7 @@ export function addStreetDetails(objects:Container){
     for(const [dx,dy]of [[-8,-25],[0,-20],[7,-24]]){box(g,dx,dy-11,2,15,0x6b8742);box(g,dx-3,dy-6,3,2,0x89984d);box(g,dx,dy-14,3,5,0xa19a54);}
     objects.addChild(g);
   }
-  for(const p of STREET_PROPS)objects.addChild(prop(p));
+  for(const p of [...STREET_PROPS,...DISTRICT_PROPS])objects.addChild(prop(p));
   for(const [x,y,w]of GARDEN_EDGES){const g=new Graphics();g.zIndex=y;g.position.set(Math.round(x/2)*2,Math.round(y/2)*2);
     box(g,3,0,w,4,0x52623d);
     for(let i=0;i<w;i+=18){const width=Math.min(16,w-i);box(g,i,-12,width,12,0x80765b);box(g,i,-12,width,3,0xbdb08a);box(g,i+2,-8,width-4,3,0x9d9270);box(g,i+width-2,-9,2,8,0x655f4d);}

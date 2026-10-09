@@ -1,103 +1,79 @@
-import {LIVING_SLICE,GARDEN_PATCHES} from "../lib/town-dressing";
-import {TOWN_SIZE,TOWN_ROADS,TOWN_PLAZAS,RIVER,BRIDGES,STEPS,mapContains} from "../lib/town-map";
-import { Texture, Sprite } from "pixi.js";
-import { ART_PIXEL } from "../lib/scene-motion";
-
-// Original procedural pixel terrain. One logical pixel = 2 world units throughout the scene.
-// This texture is static art, never a second simulation or a source of resident positions.
+import {Texture,Sprite} from "pixi.js";
+import {ART_PIXEL} from "../lib/scene-motion";
+import {TOWN_SIZE,TOWN_ROADS,TOWN_PLAZAS,TOWN_LAWNS,BRIDGES,STEPS,mapContains} from "../lib/town-map";
+import {LANDMARKS,FOREST_GROVES,MAIN_STREETS,riverBanks} from "../lib/town-landscape";
 let groundTexture:Texture|undefined;
-function groundSprite(texture:Texture){const sprite=new Sprite(texture);sprite.scale.set(ART_PIXEL);return sprite;}
-export function drawGround() {
-  // Scene switches dispose objects, while this one shared static texture remains reusable.
+const hash=(x:number,y:number)=>{let n=Math.imul(x+391,374761393)^Math.imul(y+971,668265263);n=Math.imul(n^(n>>>13),1274126177);return (n^(n>>>16))>>>0;};
+const groundSprite=(t:Texture)=>{const s=new Sprite(t);s.scale.set(ART_PIXEL);return s;};
+// Cached original pixel terrain; houses, plants, characters remain independent depth-sorted objects.
+export function drawGround(){
   if(groundTexture&&!groundTexture.destroyed)return groundSprite(groundTexture);
-  const canvas=document.createElement("canvas");canvas.width=TOWN_SIZE.width/ART_PIXEL;canvas.height=TOWN_SIZE.height/ART_PIXEL;
-  const width=canvas.width,height=canvas.height;
-  const context=canvas.getContext("2d")!;const data=context.createImageData(width,height);
-  const hash=(x:number,y:number)=>{let n=Math.imul(x+391,374761393)^Math.imul(y+971,668265263);n=Math.imul(n^(n>>>13),1274126177);return (n^(n>>>16))>>>0;};
-  const road=(x:number,y:number)=>TOWN_ROADS.some(b=>mapContains(b,x*ART_PIXEL,y*ART_PIXEL));
-  const plaza=(x:number,y:number)=>TOWN_PLAZAS.some(b=>mapContains(b,x*ART_PIXEL,y*ART_PIXEL));
-  for(let y=0;y<height;y++)for(let x=0;x<width;x++) {
-    const h=hash(x,y),patch=hash(Math.floor(x/8),Math.floor(y/8))%5-2;
-    let color:number[];
-    if(BRIDGES.some(b=>mapContains(b,x*ART_PIXEL,y*ART_PIXEL))) {
-      color=y%5===0?[113,80,45]:[176+h%9,134+h%9,78+h%9];
-    } else if(mapContains(RIVER,x*ART_PIXEL,y*ART_PIXEL)) {
-      const bank=x*ART_PIXEL<RIVER.x+8||x*ART_PIXEL>RIVER.x+RIVER.w-8;
-      color=bank?[112,143,103]:h%37===0?[155,198,191]:[77+h%10,140+h%10,153+h%10];
-    } else if(STEPS.some(b=>mapContains(b,x*ART_PIXEL,y*ART_PIXEL))) {
-      color=y%5===0?[115,112,94]:y%5===1?[216,206,174]:[172,164,137];
-    } else if(plaza(x,y)) {
-      const row=Math.floor((y-154)/7),col=(x-174+(row%2)*6)%13,iy=(y-154)%7;
-      const wear=hash(Math.floor((x-174+(row%2)*6)/13),row)%13-6;
-      color=iy===6||col===12?[158,155,130]:[191+wear,185+wear,156+wear];
-      if(iy===0&&col<11)color=[211+wear,203+wear,172+wear];
-      if(h%21===0)color=color.map(c=>c-12);
-      if(h%31===0)color=[172,178,130];
-      // Broken stone edging instead of a thick rectangular border.
-      if((x===174||x===310||y===154||y===242)&&h%4)color=[148,151,113];
-    } else if(road(x,y)) {
-      const edge=(!road(x-2,y)||!road(x+2,y)||!road(x,y-2)||!road(x,y+2))&&!plaza(x,y);
-      const noise=h%9-4;color=[211+noise+patch,190+noise+patch,145+noise+patch];
-      if(h%29===0)color=[185,164,119];if(h%47===0)color=[234,216,173];
-      if(edge&&h%3!==0)color=h%2?[159,167,105]:[180,178,124];
-    } else {
-      color=[139+patch,163+patch,94+patch];
-      if(h%17===0)color=[134+patch,158+patch,90+patch];
-      if(h%23===0)color=[145+patch,168+patch,100+patch];
-      const edge=road(x-2,y)||road(x+2,y)||road(x,y-2)||road(x,y+2);
-      if(edge&&h%3===0)color=[184,181,123];
-      // Cohesive short tufts, not isolated bright confetti.
-      if(hash(Math.floor(x/3),Math.floor(y/3))%19===0&&((x%3===1&&y%3>0)||(x%3===0&&y%3===1)))color=[121,147,81];
-    }
-    const wx=x*ART_PIXEL,wy=y*ART_PIXEL;
-    const margin=Math.min(wx-LIVING_SLICE.x,LIVING_SLICE.x+LIVING_SLICE.w-wx,wy-LIVING_SLICE.y,LIVING_SLICE.y+LIVING_SLICE.h-wy);
-    if(margin>0){
-      const mix=Math.min(1,margin/70),n=h%7-3;
-      let painted=color;
-      const isRoad=road(x,y),isPlaza=plaza(x,y),water=mapContains(RIVER,wx,wy),bridge=BRIDGES.some(b=>mapContains(b,wx,wy));
-      if(bridge){
-        const board=(x*2)%14,bolt=(x%7===1)&&(y%17===3);
-        painted=board<2?[91,65,40]:board<4?[210,164,92]:[157+n,111+n,61+n];
-        if(bolt)painted=[74,70,53];
-      }else if(water){
-        // Irregular rock/reed shore stays inside the impassable water band.
-        const shore=8+Math.floor((Math.sin(wy/47)+Math.sin(wy/19))*3),edge=Math.min(wx-RIVER.x,RIVER.x+RIVER.w-wx);
-        const ripple=hash(Math.floor(x/8),Math.floor(y/3));
-        painted=edge<shore?[95+n,102+n,76+n]:edge<shore+5?[72,155,153]:[39+n,119+n,155+n];
-        if(edge>shore+4&&ripple%13===0&&y%3===0&&x%8<6)painted=[107,189,196];
-        if(edge<shore&&y%7===0)painted=[156,158,113];
-      }else if(isPlaza){
-        const row=Math.floor(y/6),col=(x+(row%2)*6)%12,iy=y%6,v=hash(Math.floor((x+(row%2)*6)/12),row)%17;
-        painted=col===11||iy===5?[119,120,100]:[168+v,163+v,137+v];
-        if(iy===0&&col<10)painted=[202+v,193+v,160+v];
-        if(h%71===0)painted=[116,135,84];
-      }else if(isRoad){
-        // Shop aprons use the SAME existing road polygon; no extra apparent shortcuts.
-        const apron=(wx>=666&&wx<=876&&wy<402)||(wx>=1082&&wx<=1234&&wy<416);
-        if(apron){const row=Math.floor(y/5),joint=y%5===4||(x+(row%2)*5)%10===9;const v=hash(Math.floor(x/10),row)%14;painted=joint?[119,105,78]:[183+v,164+v,123+v];}
-        else{painted=[211+n+patch*2,176+n+patch*2,109+n+patch*2];
-          const edge=!road(x-3,y)||!road(x+3,y)||!road(x,y-3)||!road(x,y+3);
-          if(edge)painted=h%4===0?[128,149,68]:[176+n,151+n,86+n];
-          if(h%31===0)painted=[236,205,145];if(h%43===0)painted=[186,152,96];
+  const canvas=document.createElement("canvas");canvas.width=TOWN_SIZE.width/2;canvas.height=TOWN_SIZE.height/2;
+  const width=canvas.width,height=canvas.height,ctx=canvas.getContext("2d")!,data=ctx.createImageData(width,height);
+  const masks=new Uint8Array(width*height),district=new Uint8Array(width*height);
+  // Rasterize the physical floor once; all visible paving is clipped to the same geometry.
+  for(const [list,value]of [[TOWN_ROADS,1],[TOWN_LAWNS,3],[TOWN_PLAZAS,2]] as const)for(const b of list){
+    for(let y=Math.max(0,Math.ceil(b.y/2));y<=Math.min(height-1,Math.floor((b.y+b.h)/2));y++)for(let x=Math.max(0,Math.ceil(b.x/2));x<=Math.min(width-1,Math.floor((b.x+b.w)/2));x++)masks[y*width+x]=value;
+  }
+  ctx.imageSmoothingEnabled=false;
+  LANDMARKS.forEach((l,i)=>{ctx.beginPath();l.polygon.forEach(([x,y],k)=>k?ctx.lineTo(x/2,y/2):ctx.moveTo(x/2,y/2));ctx.closePath();ctx.fillStyle=`rgb(${i+1},0,0)`;ctx.fill();});
+  const encoded=ctx.getImageData(0,0,width,height).data;for(let i=0;i<district.length;i++)district[i]=encoded[i*4];
+  const floor=(x:number,y:number)=>x>=0&&x<width&&y>=0&&y<height?masks[y*width+x]:0;
+  for(let y=0;y<height;y++){
+    const wy=y*2,banks=riverBanks(wy);
+    for(let x=0;x<width;x++){
+      const wx=x*2,h=hash(x,y),n=h%7-3,idx=y*width+x,d=district[idx];
+      const patch=Math.sin(wx/91+Math.sin(wy/74))*Math.cos(wy/83)*6+Math.sin((wx+wy)/137)*3;
+      const grove=FOREST_GROVES.some(g=>((wx-g.x)/g.rx)**2+((wy-g.y)/g.ry)**2<1+.08*Math.sin(wx/19));
+      let c=grove?[72+n+patch,110+n+patch,49+n]:[111+n+patch,144+n+patch,70+n];
+      if(d){const tone=LANDMARKS[d-1].tone;c=tone===2?[125+n+patch,151+n+patch,82+n]:tone===1?[134+n+patch,154+n+patch,82+n]:[120+n+patch,154+n+patch,73+n];}
+      // Organic undergrowth islands give unbuilt land a role rather than filling with lawn noise.
+      const tuft=hash(Math.floor(x/6),Math.floor(y/6)),tx=(tuft>>>5)%4+1,ty=(tuft>>>9)%3+1;
+      if(tuft%3===0&&x%6===tx&&y%6>=ty&&y%6<ty+2)c=grove?[118,151,64]:[145,165,83];
+      if(tuft%7===0&&x%6===tx+1&&y%6===ty+1)c=[69,103,43];
+      if((grove||d)&&tuft%19===0&&x%6===tx&&y%6===ty)c=tuft%2?[224,198,105]:[204,207,167];
+      const bridge=BRIDGES.some(b=>mapContains(b,wx,wy));
+      if(bridge){const board=x%7;c=board===0?[88,65,43]:board===1?[211,171,103]:[154+n,114+n,64+n];if(x%7===2&&y%17===3)c=[61,65,50];}
+      else if(wx>=banks.left&&wx<=banks.right&&!floor(x,y)){
+        const edge=Math.min(wx-banks.left,banks.right-wx),flow=hash(Math.floor(x/10),Math.floor(y/3));
+        c=edge<6?[77,104,69]:edge<12?[147+n,149+n,108+n]:edge<22?[65,149,147]:[34+n,109+n,148+n];
+        if(edge>22&&flow%9===0&&y%3===0&&x%10<7)c=[106,182,188];
+        if(edge<10&&h%5===0)c=[194,186,139];
+      }else if(floor(x,y)){
+        const civic=wy>=822&&wy<=922&&wx>=330&&wx<=1370;
+        const shop=(wx>=664&&wx<=874&&wy<402)||(wx>=1080&&wx<=1230&&wy<427);
+        const bridgehead=BRIDGES.some(b=>Math.abs(wy-b.y-b.h/2)<40&&(Math.abs(wx-b.x)<65||Math.abs(wx-b.x-b.w)<65));
+        const stepping=STEPS.some(b=>mapContains(b,wx,wy))||(wx>=990&&wx<=1070&&wy>=949&&wy<1035);
+        if(stepping){c=y%5===0?[97,94,77]:y%5===1?[219,201,157]:[167+n,157+n,126+n];}
+        else if(floor(x,y)===2||shop||bridgehead){
+          const row=Math.floor(y/6),col=(x+(row%2)*7)%14,v=hash(Math.floor((x+(row%2)*7)/14),row)%17;
+          c=y%6===5||col===13?[117,115,94]:civic?[165+v,164+v,141+v]:shop?[180+v,157+v,111+v]:[181+v,174+v,143+v];
+          if(y%6===0&&col<12)c=c.map(a=>a+17);
+          if(h%97===0)c=[131,145,93];
+        }else if(floor(x,y)===3){c=[139+n,157+n,86+n];}
+        else{
+          const main=MAIN_STREETS.some(b=>mapContains(b,wx,wy));
+          const edge=(!floor(x-5,y)||!floor(x+5,y)||!floor(x,y-5)||!floor(x,y+5));
+          c=main?[218+n,182+n,116+n]:[189+n,169+n,116+n];
+          // Narrow worn spine + traversable gravel/verge, retaining the entire legal shoulder.
+          const r=TOWN_ROADS.find(b=>mapContains(b,wx,wy))!;
+          const across=r.w>r.h?Math.abs(wy-r.y-r.h/2):Math.abs(wx-r.x-r.w/2);
+          if(!main&&across>22)c=h%5?[160+n,161+n,104+n]:[200,183,132];
+          if(edge)c=h%3?[150+n,148+n,88+n]:[190,165,103];
+          if(h%41===0)c=[233,208,151];if(h%53===0)c=[152,135,88];
         }
       }else{
-        const clump=Math.sin(wx/51+Math.sin(wy/39))*Math.cos(wy/43)+Math.sin((wx+wy)/93)*.6;
-        const garden=GARDEN_PATCHES.some(p=>((wx-p.x)/p.rx)**2+((wy-p.y)/p.ry)**2<1+.08*Math.sin(wx/11));
-        painted=garden?[88+n+clump*6,125+n+clump*8,56+n]:[116+n+clump*9,149+n+clump*10,67+n+clump*4];
-        const tuft=hash(Math.floor(x/7),Math.floor(y/7)),tx=(tuft>>>5)%5+1,ty=(tuft>>>9)%4+1;
-        if(tuft%3===0&&((x%7===tx&&y%7>=ty&&y%7<=ty+2)||(x%7===tx+1&&y%7===ty+1)))painted=garden?[138,159,64]:[147,166,80];
-        if(tuft%7===0&&x%7===tx&&y%7===ty+2)painted=[75,108,49];
-        // Small clustered meadow flowers, not evenly spaced decorative icons.
-        if(garden&&tuft%5===0&&x%7===tx&&y%7===ty)painted=tuft%2?[220,205,110]:[202,196,167];
-        const edge=road(x-2,y)||road(x+2,y)||road(x,y-2)||road(x,y+2);
-        if(edge)painted=h%3?[86,119,51]:[144,153,76];
-        const bankDistance=Math.min(Math.abs(wx-RIVER.x),Math.abs(wx-RIVER.x-RIVER.w));
-        if(bankDistance<14+Math.sin(wy/23)*4)painted=h%6===0?[172,164,119]:[89+n,110+n,66+n];
+        // Front face of terrace, below an authored top contour. No wall across a walkable lane.
+        let ledge=0;for(let up=1;up<=31;up++){if(y-up>=0&&district[(y-up)*width+x]&&!d){ledge=up;break;}}
+        if(ledge){const row=Math.floor((ledge-1)/6),col=(x+row%2*5)%13,v=hash(Math.floor(x/13),row)%19;
+          c=ledge<=2?[202+n,187+n,139+n]:col===0||ledge%6===0?[85+v,83+v,63+v]:[122+v,119+v,88+v];
+          if(col===1)c=[167+v,158+v,117+v];if(col===11&&ledge%6>2)c=[78+v,82+v,58+v];if(h%17===0)c=c.map(a=>a+13);if(ledge>27&&h%3)c=[73+n,98+n,48+n];
+        }else if(d&&(!district[idx+width]||!district[idx+2*width]))c=[169+n,178+n,104+n];
+        const bankDistance=Math.min(Math.abs(wx-banks.left),Math.abs(wx-banks.right));
+        if(bankDistance<22)c=h%9===0?[168,164,117]:[73+n,106+n,54+n];
       }
-      color=color.map((c,i)=>Math.round(c+(painted[i]-c)*mix));
+      data.data.set([...c.map(a=>Math.round(a)),255],idx*4);
     }
-    const offset=(y*width+x)*4;data.data.set([...color,255],offset);
   }
-  context.putImageData(data,0,0);const texture=Texture.from(canvas);texture.source.scaleMode="nearest";
-  groundTexture=texture;return groundSprite(texture);
+  ctx.putImageData(data,0,0);groundTexture=Texture.from(canvas);groundTexture.source.scaleMode="nearest";return groundSprite(groundTexture);
 }
