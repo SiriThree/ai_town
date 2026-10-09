@@ -6,7 +6,9 @@ import { usePlayer } from "./use-player";
 import { nearbyPortal, SCENES, residentScene, type SceneId } from "../lib/player-scene";
 import { ART_PIXEL, acceptPosition, poseAt, stillAt, type Motion, type Pose } from "../lib/scene-motion";
 import { FALLBACK_LABELS, type ChatTurn } from "../lib/chat-types";
-import { boundedCamera, bubblePlacement, sceneTransform, type Camera } from "../lib/scene-view";
+import { boundedCamera, followPlayer, overviewCamera, bubblePlacement, sceneTransform, type Camera } from "../lib/scene-view";
+import {TOWN_BUILDINGS} from "../lib/town-map";
+import {INTERIORS} from "../lib/scene-data";
 import { MAP, worldTime, type World } from "../lib/world";
 
 export default function TownScene({ world, selected, onSelect, speech, onExpand, controlsBlocked, onSceneChange }: { controlsBlocked:boolean; onSceneChange:(id:SceneId)=>void; world: World; selected: string; onSelect: (id: string) => void; speech: ChatTurn | null; onExpand: () => void }) {
@@ -14,16 +16,23 @@ export default function TownScene({ world, selected, onSelect, speech, onExpand,
   const [renderReady,setRenderReady]=useState(false);
   const {player,pose:heroPose}=usePlayer(viewport,controlsBlocked,renderReady);
   const sceneId=player.sceneId;
+  const dimensions=SCENES[sceneId].size;
   const portal=nearbyPortal(player);
   const [size, setSize] = useState({width:960,height:600});
   const [camera, setCamera] = useState<Camera>({zoom:1,x:0,y:0});
   const [poses,setPoses]=useState<Record<string,Pose>>(()=>Object.fromEntries(world.npcs.map(n=>[n.id,poseAt(stillAt(n.position),0)])));
-  const cameras=useRef<Record<SceneId,Camera>>({town:{zoom:1,x:0,y:0},cafe_interior:{zoom:1,x:0,y:0},home_interior:{zoom:1,x:0,y:0}});
+  const cameras=useRef<Record<SceneId,Camera>>({town:{zoom:1,x:0,y:0},cafe_interior:{zoom:1,x:0,y:0},home_interior:{zoom:1,x:0,y:0},store_interior:{zoom:1,x:0,y:0},cottage_interior:{zoom:1,x:0,y:0}});
   const cameraScene=useRef<SceneId>("town");
   useEffect(()=>{
     if(cameraScene.current!==sceneId){cameras.current[cameraScene.current]=camera;cameraScene.current=sceneId;setCamera(cameras.current[sceneId]);}
     onSceneChange(sceneId);
   },[sceneId,camera,onSceneChange]);
+  const initialCamera=useRef(false);
+  useEffect(()=>{
+    if(sceneId!=="town"||!renderReady||(!heroPose.moving&&initialCamera.current))return;
+    const frame=requestAnimationFrame(()=>{initialCamera.current=true;setCamera(c=>followPlayer(player.position,size,c,sceneId));});
+    return ()=>cancelAnimationFrame(frame);
+  },[player.position,heroPose.moving,size,sceneId,renderReady]);
   const drag = useRef<{id:number;x:number;y:number;camera:Camera}|null>(null);
   useEffect(()=>{
     const element=viewport.current!;
@@ -34,7 +43,7 @@ export default function TownScene({ world, selected, onSelect, speech, onExpand,
   const speaker=world.npcs.find(n=>n.id===selected);
   const bubble=speaker && residentScene(speaker)===sceneId && speech ? bubblePlacement(poses[speaker.id]?.position ?? speaker.position,size,camera,{width:290,height:164},sceneId) : null;
   const baseScale=sceneTransform(size,{zoom:1,x:0,y:0},sceneId).scale;
-  function zoom(amount:number){setCamera(c=>boundedCamera({...c,zoom:c.zoom+(size.width>=600?Math.sign(amount)*.5/baseScale:amount)},size));}
+  function zoom(amount:number){setCamera(c=>boundedCamera({...c,zoom:c.zoom+(size.width>=600?Math.sign(amount)*.5/baseScale:amount)},size,sceneId));}
 
   const host = useRef<HTMLDivElement>(null);
   const renderer = useRef<{ sync:(world:World)=>void } | null>(null);
@@ -70,6 +79,7 @@ export default function TownScene({ world, selected, onSelect, speech, onExpand,
       const mountScene=()=>{
         for(const child of localApp!.stage.removeChildren())child.destroy({children:true});
         actors.clear();motions.clear();activeScene=latest.current.sceneId;
+        const bounds=SCENES[activeScene].size;localApp!.renderer.resize(bounds.width/ART_PIXEL,bounds.height/ART_PIXEL);
         const {ground,objects}=activeScene==="town"?drawTown(art):drawInterior(playerArt,activeScene);
         localApp!.stage.addChild(ground,objects);sceneObjects=objects;
         const current=latest.current;
@@ -80,6 +90,7 @@ export default function TownScene({ world, selected, onSelect, speech, onExpand,
         localApp!.canvas.setAttribute("aria-label",SCENES[activeScene].name+"游戏场景");
         host.current!.dataset.objects=String(objects.children.length);
         host.current!.dataset.scene=activeScene;
+        host.current!.dataset.groundObjects=String(ground.children.length);
         setPoses(Object.fromEntries([...motions].map(([id,m])=>[id,poseAt(m,performance.now())])));
         localApp!.render();
       };
@@ -121,25 +132,23 @@ export default function TownScene({ world, selected, onSelect, speech, onExpand,
   }, []);
   return <div ref={viewport} className={`scene ${sceneId}`} tabIndex={0} data-scene={sceneId} data-testid="scene-viewport" aria-label="小镇场景"
     onPointerDown={e=>{if(e.button!==0 || (e.target as HTMLElement).closest("button,aside"))return;e.preventDefault();e.currentTarget.focus({preventScroll:true});drag.current={id:e.pointerId,x:e.clientX,y:e.clientY,camera};e.currentTarget.setPointerCapture(e.pointerId);}}
-    onPointerMove={e=>{const d=drag.current;if(d && d.id===e.pointerId)setCamera(boundedCamera({...d.camera,x:d.camera.x+e.clientX-d.x,y:d.camera.y+e.clientY-d.y},size));}}
+    onPointerMove={e=>{const d=drag.current;if(d && d.id===e.pointerId)setCamera(boundedCamera({...d.camera,x:d.camera.x+e.clientX-d.x,y:d.camera.y+e.clientY-d.y},size,sceneId));}}
     onPointerUp={()=>{drag.current=null;}} onPointerCancel={()=>{drag.current=null;}}>
     {/* Size the canvas directly: scaling its ancestor would let the compositor blur pixel edges. */}
-    <div ref={host} className="canvas-host" data-testid="scene-canvas" style={{left:transform.x,top:transform.y,width:MAP.width*transform.scale,height:MAP.height*transform.scale}} />
-    <div className="world-plane" data-testid="world-plane" style={{width:MAP.width,height:MAP.height,transform:`translate(${transform.x}px, ${transform.y}px) scale(${transform.scale})`}}>
-      {sceneId==="town" && <><div className="place-label home-label">暖灯小屋<small>住宅 · 休息</small></div>
-      <div className="place-label cafe-label">麦香咖啡馆<small>咖啡馆 · 进食</small></div>
-      <div className="place-label square-label">树荫广场<small>社交 · 阅读</small></div></>}
+    <div ref={host} className="canvas-host" data-testid="scene-canvas" style={{left:transform.x,top:transform.y,width:dimensions.width*transform.scale,height:dimensions.height*transform.scale}} />
+    <div className="world-plane" data-testid="world-plane" style={{width:dimensions.width,height:dimensions.height,transform:`translate(${transform.x}px, ${transform.y}px) scale(${transform.scale})`}}>
+      {sceneId==="town" && <>{TOWN_BUILDINGS.map(b=><div key={b.id} className="place-label" style={{left:b.x,top:b.labelY,transform:"translateX(-50%)"}}>{b.name}<small>{b.use}</small></div>)}<div className="place-label" style={{left:480,top:492,transform:"translateX(-50%)"}}>树荫广场<small>社交 · 阅读</small></div></>}
       {world.npcs.filter(n=>residentScene(n)===sceneId).map(n => <button key={n.id} aria-label={`查看${n.name}`} aria-pressed={selected === n.id} data-testid={`npc-${n.id}`} data-motion={poses[n.id]?.moving?"walking":"idle"} data-facing={poses[n.id]?.facing} data-frame={poses[n.id]?.frame} className={`npc-target ${selected === n.id ? "selected" : ""}`} style={{ left:poses[n.id]?.position.x ?? n.position.x,top:poses[n.id]?.position.y ?? n.position.y }} onClick={() => onSelect(n.id)}><span>{n.name}</span></button>)}
       <span className="player-marker" data-testid="player" data-scene={sceneId} data-x={player.position.x.toFixed(2)} data-y={player.position.y.toFixed(2)} data-facing={heroPose.facing} data-motion={heroPose.moving?"walking":"idle"} style={{left:heroPose.position.x,top:heroPose.position.y}}><small>你</small></span>
       {SCENES[sceneId].portals.map(p=><span key={p.id} className={`door-marker ${portal?.id===p.id?"near":""}`} style={{left:p.position.x,top:p.position.y}} aria-hidden>◇</span>)}
     </div>
     {error && <p role="alert" className="scene-error">{error}</p>}
-    <div className="map-caption"><span>{SCENES[sceneId].name}</span><small>{sceneId==="town"?"沿街散步，去喝杯咖啡。":sceneId==="home_interior"?"暖灯与木香 · 居民的家":"木香与咖啡 · 独立室内场景"}</small></div>
-    <div className="camera-tools" aria-label="地图镜头"><button aria-label="缩小地图" disabled={camera.zoom<=1} onClick={()=>zoom(-.25)}>−</button><output aria-label="地图缩放">{Math.round(transform.scale/baseScale*100)}%</output><button aria-label="放大地图" disabled={camera.zoom>=2} onClick={()=>zoom(.25)}>＋</button><button onClick={()=>setCamera({zoom:1,x:0,y:0})}>复位</button></div>
+    <div className="map-caption"><span>{SCENES[sceneId].name}</span><small>{sceneId==="town"?"沿街散步，去喝杯咖啡。":INTERIORS[sceneId].caption}</small></div>
+    <div className="camera-tools" aria-label="地图镜头"><button aria-label="缩小地图" disabled={camera.zoom<=.5/baseScale} onClick={()=>zoom(-.25)}>−</button><output aria-label="地图缩放">{Math.round(transform.scale/baseScale*100)}%</output><button aria-label="放大地图" disabled={camera.zoom>=2.5} onClick={()=>zoom(.25)}>＋</button><button onClick={()=>setCamera(overviewCamera(size,sceneId))}>全景</button><button onClick={()=>setCamera(sceneId==="town"?followPlayer(player.position,size,{zoom:1,x:0,y:0},sceneId):{zoom:1,x:0,y:0})}>复位</button></div>
     {bubble && speaker && speech && <aside className="speech-bubble" data-testid="speech-bubble" data-npc={speaker.id} aria-label={`${speaker.name}的发言`} style={{left:bubble.left,top:bubble.top,width:bubble.width,height:bubble.height,"--tail-x":`${bubble.tail}px`} as CSSProperties}>
       <div className="speech-content" aria-live="polite"><div className="reply-heading"><strong>{speaker.name}</strong><span data-testid="reply-source" className={`source-badge ${speech.source}`}>{speech.source==="ai"?(speech.testMode?"AI · 本地测试替身":"AI 回复"):`降级回复 · ${FALLBACK_LABELS[speech.reason!] || "本地规则"}`}</span></div><p data-testid="chat-reply">{speech.reply}</p><small>{worldTime(speech.minute)} · {speech.worldRevision===world.revision?"本次状态":"历史发言 · 世界已更新"}</small><button onClick={onExpand}>展开全文与历史 ↗</button></div>
       <i className="bubble-tail" aria-hidden />
     </aside>}
-    <div className="player-controls" data-testid="player-controls">{portal?<strong data-testid="portal-hint">E · {portal.label}</strong>:<span>WASD / 方向键走动 · 靠近门口按 E</span>}<small>{sceneId==="town"?"点击地面控制化身 · 拖动平移 · 点击居民对话":"只显示此处的居民 · 下方门口返回街角"}</small></div>
+    <div className="player-controls" data-testid="player-controls">{portal?<strong data-testid="portal-hint">E · {portal.label}</strong>:<span>WASD / 方向键走动 · 靠近门口按 E</span>}<small>{sceneId==="town"?"点击地面控制化身 · 拖动平移 · 点击居民对话":"只显示此处的居民 · 下方出口返回对应门前"}</small></div>
   </div>;
 }

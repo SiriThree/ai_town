@@ -1,3 +1,5 @@
+import {TOWN_BUILDINGS,TOWN_FENCES,TOWN_FLOWERS,TOWN_TREES,TOWN_BENCHES,TOWN_LAMPS} from "../lib/town-map";
+import districtFrames from "./district-frames.json";
 import { Assets, Container, Graphics, Rectangle, Sprite, Texture } from "pixi.js";
 import type { Npc } from "../lib/world";
 import { RESIDENT_HEIGHT, snapPixel, type Pose } from "../lib/scene-motion";
@@ -6,11 +8,11 @@ import { drawGround } from "./scene-ground";
 
 // Original atlases; provenance: public/art/v4-1/ASSETS.md and v4-2/ASSETS.md.
 export async function loadSceneArt() {
-  const [town, aqing, aning, props] = await Promise.all([Assets.load<Texture>("/art/v4-1/town-atlas.png"), Assets.load<Texture>("/art/v4-2/aqing-walk.png"), Assets.load<Texture>("/art/v4-2/aning-walk.png"), Assets.load<Texture>("/art/v4-1/props-atlas.png")]);
-  town.source.scaleMode = aqing.source.scaleMode = aning.source.scaleMode = props.source.scaleMode = "nearest";
+  const [town, aqing, aning, props, district] = await Promise.all([Assets.load<Texture>("/art/v4-1/town-atlas.png"), Assets.load<Texture>("/art/v4-2/aqing-walk.png"), Assets.load<Texture>("/art/v4-2/aning-walk.png"), Assets.load<Texture>("/art/v4-1/props-atlas.png"),Assets.load<Texture>("/art/v8-1/east-buildings.png")]);
+  town.source.scaleMode = aqing.source.scaleMode = aning.source.scaleMode = props.source.scaleMode = district.source.scaleMode = "nearest";
   const crop=(t:Texture,x:number,y:number,w:number,h:number)=>new Texture({source:t.source,frame:new Rectangle(x,y,w,h)});
   const residentFrames=(t:Texture,layout:typeof frames.aqing)=>Object.fromEntries(Object.entries(layout).map(([direction,cells])=>[direction,cells.map(([x,y,w,h])=>crop(t,x,y,w,h))])) as Record<Pose["facing"],Texture[]>;
-  return {home:crop(town,45,39,548,545),cafe:crop(town,661,39,569,545),oak:crop(town,31,626,569,590),blossom:crop(town,650,643,573,573),
+  return {store:crop(district,...districtFrames.store as [number,number,number,number]),cottage:crop(district,...districtFrames.cottage as [number,number,number,number]),home:crop(town,45,39,548,545),cafe:crop(town,661,39,569,545),oak:crop(town,31,626,569,590),blossom:crop(town,650,643,573,573),
     fountain:crop(props,149,31,540,417),bench:crop(props,868,83,484,338),lamp:crop(props,354,450,118,539),bed:crop(props,771,597,656,314),
     aqing:residentFrames(aqing,frames.aqing),aning:residentFrames(aning,frames.aning)};
 }
@@ -29,18 +31,17 @@ export function drawTown(art:Art):{ground:Container;objects:Container} {
   ground.addChild(drawGround());
   const g=new Graphics();ground.addChild(g);
   // Upper-left daylight casts all contact shadows towards lower-right.
-  for(const [x,y,w]of [[226,300,200],[762,300,210]]) {
-    poly(g,[x-w/2,y-24,x+w/2,y-24,x+w/2+18,y+12,x-w/2+14,y+12],0x758459);
+  for(const {x,y:foot}of TOWN_BUILDINGS) {
+    const y=foot-7,w=200;poly(g,[x-w/2,y-24,x+w/2,y-24,x+w/2+18,y+12,x-w/2+14,y+12],0x758459);
   }
-  for(const [x,y,w]of [[94,301,82],[280,301,39],[642,301,54],[829,301,53],[99,495,247],[615,495,257]])fence(g,x,y,w);
-  for(const [x,y,w]of [[109,276,64],[279,279,37],[644,278,51],[830,280,49],[411,263,144],[112,473,136],[703,473,132]])objects.addChild(sprite(art.bed,x+w/2,y+15,w*314/656));
+  for(const [x,y,w]of TOWN_FENCES)fence(g,x,y,w);
+  for(const [x,y,w]of TOWN_FLOWERS)objects.addChild(sprite(art.bed,x+w/2,y+15,w*314/656));
   for(let i=0;i<7;i++){rect(g,379+i*31,284+i%2*2,20,7,0xc7bc98);rect(g,380+i*31,284+i%2*2,17,2,0xe0d1a6);}
   const fountain=sprite(art.fountain,479,462,67);objects.addChild(fountain);
-  for(const [x,y]of [[394,461],[576,461],[394,280],[576,280]])objects.addChild(sprite(art.bench,x,y,38));
-  for(const [x,y]of [[329,310],[631,310],[329,476],[631,476]])objects.addChild(sprite(art.lamp,x,y,63));
-  const home=sprite(art.home,226,307,216),cafe=sprite(art.cafe,762,307,216);
-  home.zIndex=cafe.zIndex=299;objects.addChild(home,cafe);
-  for(const [x,y,h,pink]of [[36,221,151,0],[101,143,130,0],[344,218,121,1],[602,210,136,0],[867,147,137,1],[929,282,142,0],[58,472,152,1],[179,555,156,0],[317,575,135,1],[694,562,162,0],[868,510,156,1],[939,443,131,0],[482,263,176,0]]){
+  for(const [x,y]of TOWN_BENCHES)objects.addChild(sprite(art.bench,x,y,38));
+  for(const [x,y]of TOWN_LAMPS)objects.addChild(sprite(art.lamp,x,y,63));
+  for(const b of TOWN_BUILDINGS){const house=sprite(art[b.texture],b.x,b.y,b.height);house.zIndex=b.y-8;objects.addChild(house);}
+  for(const [x,y,h,pink]of TOWN_TREES){
     const shadow=new Graphics();shadow.ellipse(x+6,y+3,h*.23,h*.075).fill({color:0x405c3b,alpha:.17});ground.addChild(shadow);objects.addChild(sprite(pink?art.blossom:art.oak,x,y,h));
   }
   const table=new Graphics();table.zIndex=292;rect(table,857,280,4,15,0x79613f);table.ellipse(859,277,14,6).fill(0x8b6744);table.ellipse(859,275,14,5).fill(0xd4b47b);rect(table,852,269,5,5,0xf6e7c7);rect(table,858,270,2,3,0xf6e7c7);objects.addChild(table);

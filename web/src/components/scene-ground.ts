@@ -1,3 +1,4 @@
+import {TOWN_SIZE,TOWN_ROADS,TOWN_PLAZAS,mapContains} from "../lib/town-map";
 import { Texture, Sprite } from "pixi.js";
 import { ART_PIXEL } from "../lib/scene-motion";
 
@@ -8,12 +9,13 @@ function groundSprite(texture:Texture){const sprite=new Sprite(texture);sprite.s
 export function drawGround() {
   // Scene switches dispose objects, while this one shared static texture remains reusable.
   if(groundTexture&&!groundTexture.destroyed)return groundSprite(groundTexture);
-  const canvas=document.createElement("canvas");canvas.width=480;canvas.height=300;
-  const context=canvas.getContext("2d")!;const data=context.createImageData(480,300);
+  const canvas=document.createElement("canvas");canvas.width=TOWN_SIZE.width/ART_PIXEL;canvas.height=TOWN_SIZE.height/ART_PIXEL;
+  const width=canvas.width,height=canvas.height;
+  const context=canvas.getContext("2d")!;const data=context.createImageData(width,height);
   const hash=(x:number,y:number)=>{let n=Math.imul(x+391,374761393)^Math.imul(y+971,668265263);n=Math.imul(n^(n>>>13),1274126177);return (n^(n>>>16))>>>0;};
-  const road=(x:number,y:number)=>(y>=166&&y<198)||(x>=94&&x<137&&y>=140&&y<198)||(x>=357&&x<404&&y>=140&&y<198)||(x>=227&&x<259&&y>=191);
-  const plaza=(x:number,y:number)=>x>=174&&x<311&&y>=154&&y<243;
-  for(let y=0;y<300;y++)for(let x=0;x<480;x++) {
+  const road=(x:number,y:number)=>TOWN_ROADS.some(b=>mapContains(b,x*ART_PIXEL,y*ART_PIXEL));
+  const plaza=(x:number,y:number)=>TOWN_PLAZAS.some(b=>mapContains(b,x*ART_PIXEL,y*ART_PIXEL));
+  for(let y=0;y<height;y++)for(let x=0;x<width;x++) {
     const h=hash(x,y),patch=hash(Math.floor(x/8),Math.floor(y/8))%5-2;
     let color:number[];
     if(plaza(x,y)) {
@@ -39,7 +41,7 @@ export function drawGround() {
       // Cohesive short tufts, not isolated bright confetti.
       if(hash(Math.floor(x/3),Math.floor(y/3))%19===0&&((x%3===1&&y%3>0)||(x%3===0&&y%3===1)))color=[121,147,81];
     }
-    const offset=(y*480+x)*4;data.data.set([...color,255],offset);
+    const offset=(y*width+x)*4;data.data.set([...color,255],offset);
   }
   context.putImageData(data,0,0);const texture=Texture.from(canvas);texture.source.scaleMode="nearest";
   groundTexture=texture;return groundSprite(texture);

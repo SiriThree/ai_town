@@ -28,7 +28,8 @@
     "test:v71": "node --env-file=.env.test.local scripts/v71-scene-check.mjs",
     "test:v71:db": "node --env-file=.env.test.local --import tsx scripts/v71-db-check.ts",
     "test:v72": "node --env-file=.env.test.local --import tsx scripts/v72-scene-check.mjs",
-    "test:v72:db": "node --env-file=.env.test.local --import tsx scripts/v72-db-check.ts"
+    "test:v72:db": "node --env-file=.env.test.local --import tsx scripts/v72-db-check.ts",
+    "test:v81": "node --env-file=.env.test.local scripts/v81-map-check.mjs"
   },
   "dependencies": {
     "next": "16.4.0",

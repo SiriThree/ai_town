@@ -1,6 +1,7 @@
+import {TOWN_SIZE,TOWN_ROADS,TOWN_PLAZAS,TOWN_LAWNS,TOWN_OBSTACLES} from "./town-map";
 import type { Point } from "./world";
 import type { Facing } from "./scene-motion";
-export type SceneId = "town" | "cafe_interior" | "home_interior";
+export type SceneId = "town" | "cafe_interior" | "home_interior" | "store_interior" | "cottage_interior";
 export type Box = { x:number; y:number; w:number; h:number };
 export type Portal = { id:string; source:SceneId; reverseId:string; npcSpawns:Record<"aqing"|"aning",Point>; position:Point; radius:number; target:SceneId; spawn:Point; facing:Facing; label:string };
 export type Furnishing = { kind:"counter"|"table"|"shelf"|"plant"|"bed"|"desk"|"wardrobe"|"fireplace"; x:number; y:number; width:number; solid:Box };
@@ -21,12 +22,37 @@ export const HOME_FURNITURE:Furnishing[] = [
   {kind:"desk",x:682,y:466,width:112,solid:{x:626,y:414,w:112,h:52}},
   {kind:"fireplace",x:246,y:468,width:96,solid:{x:198,y:418,w:96,h:50}},
 ];
+export const STORE_FURNITURE:Furnishing[]=[
+  {kind:"counter",x:638,y:276,width:216,solid:{x:530,y:226,w:216,h:50}},
+  {kind:"shelf",x:232,y:246,width:78,solid:{x:193,y:210,w:78,h:36}},
+  {kind:"shelf",x:352,y:246,width:78,solid:{x:313,y:210,w:78,h:36}},
+  {kind:"shelf",x:232,y:380,width:78,solid:{x:193,y:344,w:78,h:36}},
+  {kind:"shelf",x:352,y:380,width:78,solid:{x:313,y:344,w:78,h:36}},
+  {kind:"plant",x:752,y:468,width:42,solid:{x:736,y:450,w:32,h:18}},
+];
+export const COTTAGE_FURNITURE:Furnishing[]=[
+  {kind:"bed",x:290,y:328,width:108,solid:{x:236,y:196,w:108,h:132}},
+  {kind:"desk",x:666,y:364,width:112,solid:{x:610,y:312,w:112,h:52}},
+  {kind:"wardrobe",x:692,y:242,width:84,solid:{x:650,y:192,w:84,h:50}},
+  {kind:"fireplace",x:266,y:480,width:96,solid:{x:218,y:430,w:96,h:50}},
+  {kind:"plant",x:752,y:468,width:42,solid:{x:736,y:450,w:32,h:18}},
+];
+export const INTERIORS={
+  cafe_interior:{furniture:CAFE_FURNITURE,serviceFloor:true,rug:0xa76240,rugInner:0xc49c65,caption:"木香与咖啡 · 独立室内场景"},
+  home_interior:{furniture:HOME_FURNITURE,serviceFloor:false,rug:0x536747,rugInner:0x9baf78,caption:"暖灯与木香 · 居民的家"},
+  store_interior:{furniture:STORE_FURNITURE,serviceFloor:true,rug:0x995940,rugInner:0xcdaf79,caption:"木柜与货架 · 自由探索"},
+  cottage_interior:{furniture:COTTAGE_FURNITURE,serviceFloor:false,rug:0x496d73,rugInner:0x9db5ab,caption:"青瓦与小庭院 · 自由探索"},
+};
 // Both player and backend NPC execution use these exact paired portals.
 export const PORTALS:Portal[] = [
   {id:"cafe-door",source:"town",reverseId:"cafe-exit",position:{x:762,y:320},radius:20,target:"cafe_interior",spawn:{x:480,y:486},npcSpawns:{aqing:{x:460,y:486},aning:{x:500,y:486}},facing:"north",label:"进入麦香咖啡馆"},
   {id:"cafe-exit",source:"cafe_interior",reverseId:"cafe-door",position:{x:480,y:494},radius:22,target:"town",spawn:{x:762,y:324},npcSpawns:{aqing:{x:754,y:324},aning:{x:770,y:324}},facing:"south",label:"回到街角"},
   {id:"home-door",source:"town",reverseId:"home-exit",position:{x:226,y:320},radius:20,target:"home_interior",spawn:{x:480,y:486},npcSpawns:{aqing:{x:460,y:486},aning:{x:500,y:486}},facing:"north",label:"进入暖灯小屋"},
   {id:"home-exit",source:"home_interior",reverseId:"home-door",position:{x:480,y:494},radius:22,target:"town",spawn:{x:226,y:324},npcSpawns:{aqing:{x:218,y:324},aning:{x:234,y:324}},facing:"south",label:"回到街角"},
+  {id:"store-door",source:"town",reverseId:"store-exit",position:{x:1158,y:320},radius:20,target:"store_interior",spawn:{x:480,y:486},npcSpawns:{aqing:{x:460,y:486},aning:{x:500,y:486}},facing:"north",label:"进入石榴杂货铺"},
+  {id:"store-exit",source:"store_interior",reverseId:"store-door",position:{x:480,y:494},radius:22,target:"town",spawn:{x:1158,y:324},npcSpawns:{aqing:{x:1150,y:324},aning:{x:1166,y:324}},facing:"south",label:"回到榴木街"},
+  {id:"cottage-door",source:"town",reverseId:"cottage-exit",position:{x:1510,y:520},radius:20,target:"cottage_interior",spawn:{x:480,y:486},npcSpawns:{aqing:{x:460,y:486},aning:{x:500,y:486}},facing:"north",label:"进入青篱小居"},
+  {id:"cottage-exit",source:"cottage_interior",reverseId:"cottage-door",position:{x:480,y:494},radius:22,target:"town",spawn:{x:1510,y:524},npcSpawns:{aqing:{x:1502,y:524},aning:{x:1518,y:524}},facing:"south",label:"回到榴木街"},
 ];
 export const portalById=(id:string)=>PORTALS.find(p=>p.id===id)!;
 export const nearPortal=(p:Portal,position:Point)=>Math.hypot(position.x-p.position.x,position.y-p.position.y)<=p.radius;
@@ -45,14 +71,18 @@ export function homePath(id:"aqing"|"aning",to:"activity"|"exit"):Point[] {
   const path=[start,{x:start.x,y:400},{x:end.x,y:400},end];
   return (to==="activity"?path:path.toReversed()).map(p=>({...p}));
 }
-export const SCENES:Record<SceneId,{name:string;walkable:Box[];obstacles:Box[];portals:Portal[];art:string}> = {
-  town:{name:"晨露村 · 街角",art:"/art/v4-1/town-atlas.png",
-    walkable:[{x:80,y:332,w:810,h:78},{x:182,y:300,w:85,h:65},{x:720,y:300,w:84,h:65},{x:355,y:288,w:255,h:194}],
-    obstacles:[{x:446,y:423,w:68,h:40},{x:369,y:441,w:51,h:24},{x:551,y:441,w:51,h:24}],portals:PORTALS.filter(p=>p.source==="town")},
-  cafe_interior:{name:"麦香咖啡馆 · 室内",art:"/art/v6-1/cafe-furniture.png",
+export const SCENES:Record<SceneId,{name:string;size:{width:number;height:number};walkable:Box[];obstacles:Box[];portals:Portal[];art:string}> = {
+  town:{name:"晨露村 · 老街与榴木街",size:TOWN_SIZE,art:"/art/v4-1/town-atlas.png",
+    walkable:[...TOWN_ROADS,...TOWN_PLAZAS,...TOWN_LAWNS],obstacles:TOWN_OBSTACLES,portals:PORTALS.filter(p=>p.source==="town")},
+  cafe_interior:{name:"麦香咖啡馆 · 室内",size:{width:960,height:600},art:"/art/v6-1/cafe-furniture.png",
     walkable:[{x:172,y:166,w:616,h:346}],obstacles:CAFE_FURNITURE.map(f=>f.solid),portals:PORTALS.filter(p=>p.source==="cafe_interior")},
-  home_interior:{name:"暖灯小屋 · 室内",art:"/art/v7-2/home-furniture.png",
+  home_interior:{name:"暖灯小屋 · 室内",size:{width:960,height:600},art:"/art/v7-2/home-furniture.png",
     walkable:[{x:172,y:166,w:616,h:346}],obstacles:HOME_FURNITURE.map(f=>f.solid),portals:PORTALS.filter(p=>p.source==="home_interior")},
+  store_interior:{name:"石榴杂货铺 · 室内",size:{width:960,height:600},art:"/art/v6-1/cafe-furniture.png",
+    walkable:[{x:172,y:166,w:616,h:346}],obstacles:STORE_FURNITURE.map(f=>f.solid),portals:PORTALS.filter(p=>p.source==="store_interior")},
+  cottage_interior:{name:"青篱小居 · 室内",size:{width:960,height:600},art:"/art/v7-2/home-furniture.png",
+    walkable:[{x:172,y:166,w:616,h:346}],obstacles:COTTAGE_FURNITURE.map(f=>f.solid),portals:PORTALS.filter(p=>p.source==="cottage_interior")},
+
 };
 
 export const PLAYER_RADIUS=9;

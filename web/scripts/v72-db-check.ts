@@ -7,7 +7,7 @@ import {database,initializeWorld,readWorld,tickWorld,feedWorld,setWorldRunning,w
 import {createWorld,restoreWorld,assertWorld} from "../src/lib/world";
 const url=new URL(process.env.DATABASE_URL||"");
 if(url.hostname!=="127.0.0.1"||url.port!=="55488"||url.pathname!=="/ai_town_mvp_test")throw new Error("仅允许本项目隔离测试库55488");
-const id=`v72-${randomUUID()}`,dir="evidence/v7-2/database",checks:string[]=[];
+const id=`v72-${randomUUID()}`,dir=process.env.EVIDENCE_DIR||"evidence/v7-2/database",checks:string[]=[];
 await mkdir(dir,{recursive:true});let closed=false;
 try{
   for(const version of [1,2]){
