@@ -1,9 +1,9 @@
-import {NEW_BUILDINGS,TOWN_SIZE,TOWN_ROADS,TOWN_PLAZAS,TOWN_LAWNS,TOWN_OBSTACLES} from "./town-map";
+import {NEW_BUILDINGS,TOWN_BUILDINGS,TOWN_SIZE,TOWN_ROADS,TOWN_PLAZAS,TOWN_LAWNS,TOWN_OBSTACLES} from "./town-map";
 import type { Point } from "./world";
 import type { Facing } from "./scene-motion";
 export type SceneId = "town" | "cafe_interior" | "home_interior" | "store_interior" | "cottage_interior" | `${typeof NEW_BUILDINGS[number]["id"]}_interior`;
 export type Box = { x:number; y:number; w:number; h:number };
-export type Portal = { id:string; source:SceneId; reverseId:string; npcSpawns:Record<"aqing"|"aning",Point>; position:Point; radius:number; target:SceneId; spawn:Point; facing:Facing; label:string };
+export type Portal = { id:string; source:SceneId; reverseId:string; npcSpawns:Record<string,Point>; position:Point; radius:number; target:SceneId; spawn:Point; facing:Facing; label:string };
 export type Furnishing = { kind:"counter"|"table"|"shelf"|"plant"|"bed"|"desk"|"wardrobe"|"fireplace"; x:number; y:number; width:number; solid:Box };
 export const CAFE_FURNITURE:Furnishing[] = [
   {kind:"counter",x:360,y:250,width:220,solid:{x:250,y:204,w:220,h:46}},
@@ -78,14 +78,15 @@ export const nearPortal=(p:Portal,position:Point)=>Math.hypot(position.x-p.posit
 export const BUILDINGS = [
   {location:"cafe",name:"麦香咖啡馆",sceneId:"cafe_interior",door:"cafe-door",exit:"cafe-exit"},
   {location:"home",name:"暖灯小屋",sceneId:"home_interior",door:"home-door",exit:"home-exit"},
+  ...TOWN_BUILDINGS.filter(b=>b.id!=="home"&&b.id!=="cafe").map(b=>({location:b.id,name:b.name,sceneId:`${b.id}_interior` as SceneId,door:b.id+"-door",exit:b.id+"-exit"})),
 ] as const;
 export const buildingAt=(location:string)=>BUILDINGS.find(b=>b.location===location);
 export const buildingIn=(sceneId:SceneId)=>BUILDINGS.find(b=>b.sceneId===sceneId);
-export const HOME_REST:Record<"aqing"|"aning",{position:Point;facing:Facing}> = {
+export const HOME_REST:Record<string,{position:Point;facing:Facing}> = {
   aqing:{position:{x:370,y:300},facing:"west"},aning:{position:{x:588,y:300},facing:"east"},
 };
 // Authored, collision-checked routes to the two beds' walkable neighbours, not bed centres.
-export function homePath(id:"aqing"|"aning",to:"activity"|"exit"):Point[] {
+export function homePath(id:string,to:"activity"|"exit"):Point[] {
   const start=portalById("home-door").npcSpawns[id],end=HOME_REST[id].position;
   const path=[start,{x:start.x,y:400},{x:end.x,y:400},end];
   return (to==="activity"?path:path.toReversed()).map(p=>({...p}));
@@ -129,4 +130,9 @@ export function validScenePath(sceneId:SceneId,path:Point[]):boolean {
     for(let k=0;k<=steps;k++)if(!canStand(sceneId,{x:a.x+(b.x-a.x)*k/steps,y:a.y+(b.y-a.y)*k/steps}))return false;
   }
   return true;
+}
+
+export function portalSpawn(id:string,npcId:string):Point {
+  const p=portalById(id);const known=p.npcSpawns[npcId];if(known)return {...known};
+  const slot=[...npcId].reduce((sum,c)=>sum+c.charCodeAt(0),0)%4;return {x:p.spawn.x+[-6,-2,2,6][slot],y:p.spawn.y};
 }

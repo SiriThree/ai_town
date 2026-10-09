@@ -46,7 +46,7 @@ export default function Town() {
     let active = true;
     const syncSelection = () => {
       const id = new URL(location.href).searchParams.get("npc");
-      const valid = id === "aqing" || id === "aning";
+      const valid = !!id && /^[a-z][a-z0-9_-]{0,39}$/.test(id);
       setSelected(valid ? id : "");
       setPanel(null); setChatOpen(valid); setSpeech(null); setHistoryOpen(false);
     };
@@ -144,8 +144,8 @@ export default function Town() {
         </div>
         {panel === "profile" && npc && <aside className="paper profile" aria-label="居民档案" data-testid="profile">
           <div className="panel-heading"><span>居 民 档 案</span><button aria-label="关闭档案" onClick={() => setPanel(null)}>×</button></div>
-          <div className="identity"><span className={`portrait ${npc.id}`} aria-hidden>{npc.id === "aqing" ? "晴" : "宁"}</span><div><h2>{npc.name}</h2><p>{npc.personality === "outgoing" ? "外向 · 喜欢热闹" : "安静 · 喜欢阅读"}</p></div></div>
-          <p className="location">⌖ {npcPlace(npc,world)}</p>
+          <div className="identity"><span className={`portrait ${npc.id}`} aria-hidden>{npc.name.slice(-1)}</span><div><h2>{npc.name}</h2><p>{npc.personality === "outgoing" ? "外向 · 喜欢热闹" : "安静 · 喜欢阅读"}</p></div></div>
+          <p className="location">⌖ {npcPlace(npc,world)}</p><p>{npc.bio}</p>{npc.job&&<p>职业：{npc.job==="cafe"?"咖啡馆备餐员":"杂货铺理货员"}</p>}
           <dl className="needs">{([["hunger", "饥饿", "越低越饱足"], ["energy", "精力", "越高越有活力"], ["mood", "心情", "越高越愉快"]] as const).map(([key,label,hint]) => <div key={key}><dt>{label}<small>{hint}</small></dt><dd><span data-testid={`stat-${key}`}>{npc[key]}</span><span className={`meter ${key}`}><span style={{width:`${npc[key]}%`}} /></span></dd></div>)}</dl>
           <div className="decision"><small>此刻的行动</small><h3 data-testid="npc-action">{npc.action}</h3><p>{npc.reason}</p></div>
           <p className="profile-foot">{worldTime(world.minute)} · 来自已保存的世界</p>
@@ -162,6 +162,6 @@ export default function Town() {
         <p className="muted">最近 100 条已保存事件 · 新的在前</p>
         <div className="log-list">{world.events.length ? [...world.events].reverse().map(e => <article key={e.id}><time>{worldTime(e.minute)}</time><h3>{e.text}</h3><p>{e.reason}</p></article>) : <p>还没有发生事件。推进一步，看看居民的选择。</p>}</div>
       </dialog>
-    </> : <section className="loading-paper paper"><h2>翻开小镇手记</h2><p>{error ? "数据库连接尚未就绪，页面不会生成虚假的世界。" : "正在从后台读取两位居民的日常…"}</p></section>}
+    </> : <section className="loading-paper paper"><h2>翻开小镇手记</h2><p>{error ? "数据库连接尚未就绪，页面不会生成虚假的世界。" : "正在从后台读取居民的日常…"}</p></section>}
   </main>;
 }

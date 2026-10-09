@@ -1,4 +1,5 @@
 import {TOWN_BUILDINGS,TOWN_FENCES,TOWN_FLOWERS,TOWN_TREES,TOWN_BENCHES,TOWN_LAMPS,BRIDGES} from "../lib/town-map";
+import newFrames from "./new-resident-frames.json";
 import districtFrames from "./district-frames.json";
 import { Assets, Container, Graphics, Rectangle, Sprite, Texture } from "pixi.js";
 import type { Npc } from "../lib/world";
@@ -8,13 +9,13 @@ import { drawGround } from "./scene-ground";
 
 // Original atlases; provenance: public/art/v4-1/ASSETS.md and v4-2/ASSETS.md.
 export async function loadSceneArt() {
-  const [town, aqing, aning, props, district, expansion] = await Promise.all([Assets.load<Texture>("/art/v4-1/town-atlas.png"), Assets.load<Texture>("/art/v4-2/aqing-walk.png"), Assets.load<Texture>("/art/v4-2/aning-walk.png"), Assets.load<Texture>("/art/v4-1/props-atlas.png"),Assets.load<Texture>("/art/v8-1/east-buildings.png"),Assets.load<Texture>("/art/v8-2/buildings.png")]);
-  town.source.scaleMode = aqing.source.scaleMode = aning.source.scaleMode = props.source.scaleMode = district.source.scaleMode = expansion.source.scaleMode = "nearest";
+  const [town, aqing, aning, props, district, expansion, residents] = await Promise.all([Assets.load<Texture>("/art/v4-1/town-atlas.png"), Assets.load<Texture>("/art/v4-2/aqing-walk.png"), Assets.load<Texture>("/art/v4-2/aning-walk.png"), Assets.load<Texture>("/art/v4-1/props-atlas.png"),Assets.load<Texture>("/art/v8-1/east-buildings.png"),Assets.load<Texture>("/art/v8-2/buildings.png"),Assets.load<Texture>("/art/v9-1/residents.png")]);
+  town.source.scaleMode = aqing.source.scaleMode = aning.source.scaleMode = props.source.scaleMode = district.source.scaleMode = expansion.source.scaleMode = residents.source.scaleMode = "nearest";
   const crop=(t:Texture,x:number,y:number,w:number,h:number)=>new Texture({source:t.source,frame:new Rectangle(x,y,w,h)});
   const residentFrames=(t:Texture,layout:typeof frames.aqing)=>Object.fromEntries(Object.entries(layout).map(([direction,cells])=>[direction,cells.map(([x,y,w,h])=>crop(t,x,y,w,h))])) as Record<Pose["facing"],Texture[]>;
   return {hall:crop(expansion,8,30,428,392),clinic:crop(expansion,470,82,391,337),library:crop(expansion,912,29,402,393),workshop:crop(expansion,1338,42,423,380),rose:crop(expansion,17,490,407,365),sage:crop(expansion,445,508,440,342),reed:crop(expansion,893,512,436,347),stone:crop(expansion,1342,432,416,424),store:crop(district,...districtFrames.store as [number,number,number,number]),cottage:crop(district,...districtFrames.cottage as [number,number,number,number]),home:crop(town,45,39,548,545),cafe:crop(town,661,39,569,545),oak:crop(town,31,626,569,590),blossom:crop(town,650,643,573,573),
     fountain:crop(props,149,31,540,417),bench:crop(props,868,83,484,338),lamp:crop(props,354,450,118,539),bed:crop(props,771,597,656,314),
-    aqing:residentFrames(aqing,frames.aqing),aning:residentFrames(aning,frames.aning)};
+    residents:{aqing:residentFrames(aqing,frames.aqing),aning:residentFrames(aning,frames.aning),...Object.fromEntries(Object.entries(newFrames).map(([id,layout])=>[id,residentFrames(residents,layout)]))} as Record<string,Record<Pose["facing"],Texture[]>>};
 }
 type Art=Awaited<ReturnType<typeof loadSceneArt>>;
 const rect=(g:Graphics,x:number,y:number,w:number,h:number,c:number)=>g.rect(x,y,w,h).fill(c);
@@ -52,13 +53,15 @@ export type ResidentArt={node:Container;update:(pose:Pose,selected:boolean)=>boo
 export function drawResident(n:Npc,selected:boolean,art:Art):ResidentArt {
   const node=new Container(),shadow=new Graphics(),ring=new Graphics(),marker=new Graphics();
   shadow.ellipse(3,1,14,5).fill({color:0x374835,alpha:.28});ring.ellipse(0,0,20,8).stroke({color:0xffedac,width:2});
-  const figure=sprite(art[n.id].south[0],0,0,RESIDENT_HEIGHT);poly(marker,[-4,-74,4,-74,0,-70],0xffedac);node.addChild(shadow,ring,figure,marker);
+  const appearance=n.appearance??n.id,resident=art.residents[appearance]??art.residents.aqing;
+  const figure=sprite(resident.south[0],0,0,RESIDENT_HEIGHT);poly(marker,[-4,-74,4,-74,0,-70],0xffedac);node.addChild(shadow,ring,figure,marker);
   let previous="";
   const update=(pose:Pose,isSelected:boolean)=>{
     const signature=`${pose.position.x}:${pose.position.y}:${pose.facing}:${pose.frame}:${pose.moving}:${isSelected}`;
     if(signature===previous)return false;previous=signature;
     node.position.set(pose.position.x,pose.position.y);node.zIndex=pose.position.y;
-    figure.texture=art[n.id][pose.facing][pose.frame];figure.height=RESIDENT_HEIGHT;figure.width=Math.round(RESIDENT_HEIGHT*figure.texture.width/figure.texture.height/2)*2;
+    figure.texture=resident[pose.facing][pose.frame];figure.scale.set(1);figure.height=RESIDENT_HEIGHT;figure.width=Math.round(RESIDENT_HEIGHT*figure.texture.width/figure.texture.height/2)*2;
+    if(n.appearance&&pose.facing==="west")figure.scale.x=-Math.abs(figure.scale.x);
     ring.visible=marker.visible=isSelected;return true;
   };
   update({position:n.position,facing:"south",frame:0,moving:false},selected);return {node,update};

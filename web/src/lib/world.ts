@@ -1,16 +1,19 @@
-import {buildingAt,buildingIn,portalById,nearPortal,HOME_REST,homePath,validScenePath,npcCafeSpawn,canStand,type SceneId} from "./scene-data";
-export type LocationId = "home" | "cafe" | "square";
+import {buildingAt,buildingIn,portalById,nearPortal,HOME_REST,homePath,validScenePath,npcCafeSpawn,canStand,portalSpawn,type SceneId} from "./scene-data";
+import {TOWN_BUILDINGS} from "./town-map";
+import {RESIDENTS} from "./residents";
+import {findScenePath} from "./navigation";
+export type LocationId = typeof TOWN_BUILDINGS[number]["id"] | "square";
 export type Point = { x: number; y: number };
 export type Action = { kind:"walk-inside"; to:"activity"|"exit" } | { kind: "move"; to: LocationId } | { kind: "eat" | "rest" | "socialize" | "read" | "wait" | "enter" | "exit" };
 export type Decision = { action: Action; reason: string };
 export type Npc = {
-  id: "aqing" | "aning"; name: string; personality: "outgoing" | "quiet";
+  id: string; homeId?:LocationId; job?:"cafe"|"store"; preference?:"service"|"home"|"social"|"study"; bio?:string; appearance?:string; name: string; personality: "outgoing" | "quiet";
   hunger: number; energy: number; mood: number; location: LocationId;
   sceneId: SceneId; facing?: "north"|"south"|"east"|"west"; position: Point; action: string; reason: string; lastPath: Point[];
 };
 export type TownEvent = { id: number; minute: number; npcId: Npc["id"]; text: string; reason: string };
 export type World = {
-  schemaVersion: 2; revision: number; name: string; minute: number;
+  schemaVersion: 2; rosterVersion?:1; revision: number; name: string; minute: number;
   run?: { running: boolean; nextTickAt: number | null };
   locations: { id: LocationId; name: string; use: string }[];
   npcs: Npc[]; events: TownEvent[];
@@ -30,8 +33,8 @@ const clamp = (n: number) => Math.max(0, Math.min(100, n));
 export function positionAt(location: LocationId, id: Npc["id"]): Point {
   const second = id === "aning";
   const building=buildingAt(location);
-  if(building)return {...portalById(building.exit).npcSpawns[id]};
-  return { x: second ? 524 : 442, y: second ? 392 : 368 };
+  if(building)return portalSpawn(building.exit,id);
+  return id==="aqing"||id==="aning"?{ x: second ? 524 : 442, y: second ? 392 : 368 }:{x:420+Math.max(0,RESIDENTS.findIndex(n=>n.id===id))*34,y:340};
 }
 export function createWorld(): World {
   return {
@@ -43,28 +46,44 @@ export function createWorld(): World {
     ].map(n => ({ ...n, sceneId:"town", location: "square", position: positionAt("square", n.id as Npc["id"]), action: "刚到广场", reason: "新的一天，从广场开始。", lastPath: [] })) as Npc[],
   };
 }
+export function populateResidents(world:World):World {
+  const next=structuredClone(world);let changed=!next.rosterVersion;
+  for(const d of RESIDENTS)if(!next.npcs.some(n=>n.id===d.id)){
+    next.npcs.push({...d,hunger:18,energy:86,mood:68,location:"square",sceneId:"town",position:positionAt("square",d.id),action:"来到小镇",reason:"保留原居民，新增居民从合法广场位置开始。",lastPath:[]});changed=true;
+  }
+  if(!changed)return world;
+  for(const b of TOWN_BUILDINGS)if(!next.locations.some(l=>l.id===b.id))next.locations.push({id:b.id,name:b.name,use:"小镇生活场所"});
+  next.rosterVersion=1;next.revision++;assertWorld(next);return next;
+}
+export const homeOf=(n:Npc):LocationId=>n.homeId??"home";
+export const restPoint=(n:Npc):Point=>!n.homeId?HOME_REST[n.id].position:n.homeId==="stone"?{x:588,y:300}:{x:370,y:300};
+export function indoorPath(n:Npc,to:"activity"|"exit"):Point[]{
+  if(!n.homeId&&n.sceneId==="home_interior")return homePath(n.id,to);
+  const b=buildingIn(n.sceneId);if(!b)return [];
+  return findScenePath(n.sceneId,n.position,to==="exit"?portalSpawn(b.door,n.id):restPoint(n));
+}
 export function canExecute(npc: Npc, action: Action, world: World): boolean {
   switch (action.kind) {
     case "move": {
       const building=buildingAt(action.to);
-      return npc.sceneId==="town" && LOCATIONS.some(l=>l.id===action.to) && (npc.location!==action.to || !!building&&!nearPortal(portalById(building.door),npc.position));
+      return npc.sceneId==="town" && world.locations.some(l=>l.id===action.to) && (npc.location!==action.to || !!building&&!nearPortal(portalById(building.door),npc.position));
     }
     case "enter": {
       const b=buildingAt(npc.location);if(!b||npc.sceneId!=="town")return false;
-      const p=portalById(b.door);return nearPortal(p,npc.position)&&canStand(p.target,p.npcSpawns[npc.id]);
+      const p=portalById(b.door);return nearPortal(p,npc.position)&&canStand(p.target,portalSpawn(p.id,npc.id));
     }
     case "exit": {
       const b=buildingIn(npc.sceneId);if(!b||npc.location!==b.location)return false;
-      const p=portalById(b.exit);return nearPortal(p,npc.position)&&canStand(p.target,p.npcSpawns[npc.id]);
+      const p=portalById(b.exit);return nearPortal(p,npc.position)&&canStand(p.target,portalSpawn(p.id,npc.id));
     }
     case "walk-inside": {
-      if(npc.sceneId!=="home_interior"||npc.location!=="home")return false;
-      const path=homePath(npc.id,action.to);
+      if(!buildingIn(npc.sceneId)|| (action.to==="activity"&&npc.location!==homeOf(npc)))return false;
+      const path=indoorPath(npc,action.to);
       return samePoint(npc.position,path[0])&&validScenePath(npc.sceneId,path);
     }
     case "eat": return npc.sceneId==="cafe_interior" && npc.location === "cafe";
-    case "rest": return npc.sceneId==="home_interior" && npc.location==="home" && samePoint(npc.position,HOME_REST[npc.id].position);
-    case "read": return npc.sceneId==="town" && npc.location === "square";
+    case "rest": return npc.sceneId!=="town" && npc.location===homeOf(npc) && samePoint(npc.position,restPoint(npc));
+    case "read": return (npc.sceneId==="town" && npc.location === "square") || (!!npc.homeId&&npc.sceneId!=="town");
     case "socialize": return npc.sceneId==="town" && npc.location === "square" && world.npcs.some(n => n.id !== npc.id && n.sceneId==="town" && n.location === "square");
     case "wait": return true;
     default: return false;
@@ -74,12 +93,18 @@ export function decide(npc: Npc, world: World): Decision {
   let target: LocationId = "square";
   let activity: Action = { kind: "read" };
   let reason: string;
-  if (npc.sceneId==="home_interior" && samePoint(npc.position,HOME_REST[npc.id].position) && npc.energy<65 && npc.hunger<85) {
-    target="home";activity={kind:"rest"};reason=`正在床边恢复，精力 ${npc.energy} 尚未恢复到 65，饥饿 ${npc.hunger} 未到紧急程度。`;
-  } else if (npc.energy <= 25 && (npc.hunger < 65 || 100 - npc.energy >= npc.hunger)) {
-    target = "home"; activity = { kind: "rest" }; reason = `精力只有 ${npc.energy}，先休息恢复体力。`;
+  if (npc.sceneId!=="town" && npc.location===homeOf(npc) && samePoint(npc.position,restPoint(npc)) && npc.energy<65 && npc.hunger<85) {
+    target=homeOf(npc);activity={kind:"rest"};reason=`正在床边恢复，精力 ${npc.energy} 尚未恢复到 65，饥饿 ${npc.hunger} 未到紧急程度。`;
+  } else if (npc.energy <= (npc.preference==="home"?45:25) && (npc.hunger < 65 || 100 - npc.energy >= npc.hunger)) {
+    target = homeOf(npc); activity = { kind: "rest" }; reason = `精力只有 ${npc.energy}，先休息恢复体力。`;
   } else if (npc.hunger >= 65) {
     target = "cafe"; activity = { kind: "eat" }; reason = `饥饿达到 ${npc.hunger}，先去填饱肚子。`;
+  } else if(npc.preference==="service"&&npc.job){
+    target=npc.job;activity={kind:"read"};reason="需求满足，偏好熟悉的职业场所；当前尚未执行工作任务。";
+  } else if(npc.preference==="home"){
+    target=homeOf(npc);activity={kind:"read"};reason="偏好居家与安静，在自己的房间读书。";
+  } else if(npc.preference==="study"){
+    target="library";activity={kind:"read"};reason="偏好公共书屋的阅读环境。";
   } else if (npc.personality === "outgoing" && world.npcs.some(n => n.id !== npc.id && n.sceneId==="town" && n.location === "square")) {
     activity = { kind: "socialize" }; reason = `基本需求满足，心情 ${npc.mood}；喜欢热闹，想与广场上的邻居交流。`;
   } else {
@@ -89,7 +114,7 @@ export function decide(npc: Npc, world: World): Decision {
   let action:Action;
   if(currentBuilding){
     if(currentBuilding.location===target){
-      action=target==="home"&&!samePoint(npc.position,HOME_REST[npc.id].position)?{kind:"walk-inside",to:"activity"}:activity;
+      action=target===homeOf(npc)&&!samePoint(npc.position,restPoint(npc))?{kind:"walk-inside",to:"activity"}:activity;
     }else action=nearPortal(portalById(currentBuilding.exit),npc.position)?{kind:"exit"}:{kind:"walk-inside",to:"exit"};
   }else if(targetBuilding){
     action=npc.location===target&&nearPortal(portalById(targetBuilding.door),npc.position)?{kind:"enter"}:{kind:"move",to:target};
@@ -101,6 +126,7 @@ export function decide(npc: Npc, world: World): Decision {
 export function roadPath(npc: Npc, to: LocationId): Point[] {
   if(npc.sceneId!=="town")throw new Error("室内坐标不能生成室外路径");
   const end = positionAt(to, npc.id);
+  if(npc.homeId)return findScenePath("town",npc.position,end);
   return [npc.position, { x: npc.position.x, y: MAP.roadY }, { x: end.x, y: MAP.roadY }, end];
 }
 export function execute(npc: Npc, decision: Decision, world: World): Npc {
@@ -114,19 +140,19 @@ export function execute(npc: Npc, decision: Decision, world: World): Npc {
     case "move":
       next.lastPath = roadPath(npc, action.to); next.location = action.to;
       next.position = positionAt(action.to, npc.id); next.energy -= 3;
-      next.action = `来到${LOCATIONS.find(l => l.id === action.to)!.name}${buildingAt(action.to)?"室外门口":""}`; break;
+      next.action = `来到${world.locations.find(l => l.id === action.to)!.name}${buildingAt(action.to)?"室外门口":""}`; break;
     case "enter":
     case "exit": {
       const b=action.kind==="enter"?buildingAt(npc.location)!:buildingIn(npc.sceneId)!;
       const portal=portalById(action.kind==="enter"?b.door:b.exit);
-      next.sceneId=portal.target;next.position={...portal.npcSpawns[npc.id]};next.facing=portal.facing;
+      next.sceneId=portal.target;next.position=portalSpawn(portal.id,npc.id);next.facing=portal.facing;
       next.action=action.kind==="enter"?`进入${b.name}`:`离开${b.name}，回到门前`;break;
     }
     case "walk-inside":
-      next.lastPath=homePath(npc.id,action.to);next.position={...next.lastPath.at(-1)!};
-      next.action=action.to==="activity"?"走到暖灯小屋床边":"走到暖灯小屋出口";break;
+      next.lastPath=indoorPath(npc,action.to);next.position={...next.lastPath.at(-1)!};
+      next.action=action.to==="activity"?`走到${buildingIn(npc.sceneId)!.name}床边`:`走到${buildingIn(npc.sceneId)!.name}出口`;break;
     case "eat": next.hunger -= 50; next.energy += 6; break;
-    case "rest": next.facing=HOME_REST[npc.id].facing;next.energy += 40; next.mood += 4; break;
+    case "rest": next.facing=npc.homeId?(npc.homeId==="stone"?"east":"west"):HOME_REST[npc.id].facing;next.energy += 40; next.mood += 4; break;
     case "socialize": next.mood += 14; next.energy -= 6; break;
     case "read": next.mood += 9; next.energy -= 2; break;
     case "wait": next.energy += 3; break;
@@ -138,12 +164,12 @@ export function execute(npc: Npc, decision: Decision, world: World): Npc {
 export function advanceWorld(world: World): World {
   const next = structuredClone(world);
   next.minute += 10; next.revision += 1;
-  next.npcs = next.npcs.map(n => ({ ...n, hunger: clamp(n.hunger + 8), energy: clamp(n.energy - 6), mood: clamp(n.mood - 2) }));
+  next.npcs = next.npcs.map(n => ({ ...n, hunger: clamp(n.hunger + (n.homeId?3:8)), energy: clamp(n.energy - (n.homeId?2:6)), mood: clamp(n.mood - 2) }));
   // Stable turn order: each later resident sees earlier residents' committed-in-turn moves.
   for (let i = 0; i < next.npcs.length; i++) {
     const n = execute(next.npcs[i], decide(next.npcs[i], next), next);
     next.npcs[i] = n;
-    next.events.push({ id: next.revision * 2 - 1 + i, minute: next.minute, npcId: n.id, text: `${n.name} · ${n.action}`, reason: n.reason });
+    next.events.push({ id: next.revision * 1000 + i, minute: next.minute, npcId: n.id, text: `${n.name} · ${n.action}`, reason: n.reason });
   }
   next.events = next.events.slice(-100);
   return next;
@@ -156,7 +182,7 @@ export function giveFood(world: World, npcId: string): World {
   const target = next.npcs.find(n => n.id === npcId)!;
   target.hunger = clamp(target.hunger - FOOD_AMOUNT);
   next.revision += 1;
-  next.events.push({ id: next.revision * 2, minute: next.minute, npcId: target.id,
+  next.events.push({ id: next.revision * 1000, minute: next.minute, npcId: target.id,
     text: `你给${target.name}送了食物 · 饥饿 ${npc.hunger} → ${target.hunger}`,
     reason: "玩家提供食物；只降低饥饿，下一步仍由居民根据真实需求选择。" });
   next.events = next.events.slice(-100);
@@ -171,6 +197,7 @@ export function advanceOnClock(world: World, now: number, automatic: boolean): W
 }
 const samePoint=(a:Point|undefined,b:Point)=>a?.x===b.x&&a?.y===b.y;
 function validNpcPosition(n:Npc):boolean {
+  if(n.homeId)return !!buildingAt(n.homeId)&&canStand(n.sceneId,n.position)&&(n.sceneId==="town"||buildingIn(n.sceneId)?.location===n.location);
   if(n.sceneId==="cafe_interior")return n.location==="cafe"&&samePoint(n.position,npcCafeSpawn(n.id));
   if(n.sceneId==="home_interior")return n.location==="home"&&(samePoint(n.position,portalById("home-door").npcSpawns[n.id])||samePoint(n.position,HOME_REST[n.id].position));
   if(n.sceneId!=="town")return false;
@@ -193,11 +220,11 @@ export function npcPlace(npc:Npc,world:World):string {
 }
 export function assertWorld(value: unknown): asserts value is World {
   const w = value as World;
-  if (!w || w.schemaVersion !== 2 || !Number.isSafeInteger(w.revision) || w.revision < 0 || !Number.isSafeInteger(w.minute) || w.minute < 480 || w.npcs?.length !== 2 || !Array.isArray(w.events) || w.locations?.length !== 3 || !LOCATIONS.every((l, i) => w.locations[i].id === l.id && w.locations[i].name === l.name && w.locations[i].use === l.use)) throw new Error("不兼容的世界存档");
-  if (new Set(w.npcs.map(n => n.id)).size !== 2) throw new Error("重复的居民存档");
+  if (!w || w.schemaVersion !== 2 || !Number.isSafeInteger(w.revision) || w.revision < 0 || !Number.isSafeInteger(w.minute) || w.minute < 480 || (!Array.isArray(w.npcs)||w.npcs.length<2||w.npcs.length>30) || !Array.isArray(w.events) || (!Array.isArray(w.locations)||w.locations.length<3) || !LOCATIONS.every((l, i) => w.locations[i].id === l.id && w.locations[i].name === l.name && w.locations[i].use === l.use)) throw new Error("不兼容的世界存档");
+  if (new Set(w.npcs.map(n => n.id)).size !== w.npcs.length) throw new Error("重复的居民存档");
   if (w.run !== undefined && (!w.run || typeof w.run.running !== "boolean" || (w.run.running ? !Number.isSafeInteger(w.run.nextTickAt) || w.run.nextTickAt! < 0 : w.run.nextTickAt !== null))) throw new Error("运行状态存档无效");
   for (const n of w.npcs) {
-    if (!["aqing", "aning"].includes(n.id) || !["quiet", "outgoing"].includes(n.personality) || !LOCATIONS.some(l => l.id === n.location) || [n.hunger, n.energy, n.mood].some(v => !Number.isFinite(v) || v < 0 || v > 100) || !validNpcPosition(n) || !Array.isArray(n.lastPath) || (n.sceneId==="cafe_interior"&&n.lastPath.length!==0) || (n.facing!==undefined&&!["north","south","east","west"].includes(n.facing)) || (n.sceneId==="home_interior"&&n.lastPath.length!==0&&(!validScenePath(n.sceneId,n.lastPath)||!samePoint(n.lastPath.at(-1),n.position))) || n.lastPath.some(p=>!Number.isFinite(p.x)||!Number.isFinite(p.y))) throw new Error("居民存档无效");
+    if ((!/^[a-z][a-z0-9_-]{0,39}$/.test(n.id)||(!n.homeId&&!["aqing","aning"].includes(n.id))) || !["quiet", "outgoing"].includes(n.personality) || !w.locations.some(l => l.id === n.location) || [n.hunger, n.energy, n.mood].some(v => !Number.isFinite(v) || v < 0 || v > 100) || !validNpcPosition(n) || !Array.isArray(n.lastPath) || (!n.homeId&&n.sceneId==="cafe_interior"&&n.lastPath.length!==0) || (n.facing!==undefined&&!["north","south","east","west"].includes(n.facing)) || (n.sceneId==="home_interior"&&n.lastPath.length!==0&&(!validScenePath(n.sceneId,n.lastPath)||!samePoint(n.lastPath.at(-1),n.position))) || (n.homeId&&n.lastPath.length>0&&(!validScenePath(n.sceneId,n.lastPath)||!samePoint(n.lastPath.at(-1),n.position))) || n.lastPath.some(p=>!Number.isFinite(p.x)||!Number.isFinite(p.y))) throw new Error("居民存档无效");
   }
 }
 export function worldTime(minute: number): string {

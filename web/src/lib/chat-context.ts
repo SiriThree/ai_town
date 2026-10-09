@@ -7,7 +7,7 @@ export const PERSONAS: Record<Npc["personality"], string> = {
 };
 export type ModelMessage = { role: "system" | "user" | "assistant"; content: string };
 export function buildMessages(npc: Npc, world: World, history: ChatTurn[], message: string): ModelMessage[] {
-  const facts = { name: npc.name, personality: PERSONAS[npc.personality], location: npcPlace(npc,world), sceneId:npc.sceneId, position:npc.position,
+  const facts = { name: npc.name, biography:npc.bio, home:npc.homeId, job:npc.job, personality: PERSONAS[npc.personality], location: npcPlace(npc,world), sceneId:npc.sceneId, position:npc.position,
     action: npc.action, hunger: npc.hunger, energy: npc.energy, mood: npc.mood, minute: world.minute, worldRevision: world.revision,
     events: world.events.filter(e => e.npcId === npc.id).slice(-3).map(e => ({ minute: e.minute, text: e.text })),
     historicalDialogue: history.slice(-4).map(t => ({ minute:t.minute, worldRevision:t.worldRevision, player:t.message, npc:t.reply })) };

@@ -32,18 +32,18 @@ export function poseAt(m:Motion,now:number):Pose {
   return {position:{x:snapPixel(p.position.x),y:snapPixel(p.position.y)},facing:!p.moving&&m.idleFacing?m.idleFacing:p.facing,moving:p.moving,frame:p.moving?[0,1,0,2][Math.floor(Math.max(0,now-m.startedAt)/140)%4]:0};
 }
 // Accept only the current backend's actual corridor path; never synthesize a detour.
-export function acceptPosition(m:Motion,npc:Pick<Npc,"position"|"lastPath"> & {sceneId?:SceneId;facing?:Facing},now:number):Motion {
+export function acceptPosition(m:Motion,npc:Pick<Npc,"position"|"lastPath"> & {sceneId?:SceneId;facing?:Facing;homeId?:string},now:number):Motion {
   const sceneId=npc.sceneId??"town";
   if(sceneId!==m.sceneId)return stillAt(npc.position,npc.facing??"south",sceneId);
   if(same(m.target,npc.position))return npc.facing?{...m,idleFacing:npc.facing}:m; // polling, selection, feeding and run toggles do not replay a path
   const p=npc.lastPath;
   const expected=[m.target,{x:m.target.x,y:MAP.roadY},{x:npc.position.x,y:MAP.roadY},npc.position];
-  if(sceneId==="town" ? p.length!==4||p.some((point,i)=>!same(point,expected[i])||!Number.isFinite(point.x)||!Number.isFinite(point.y)||point.x<0||point.x>MAP.width||point.y<0||point.y>MAP.height) : !validScenePath(sceneId,p)||!same(p[0],m.target)||!same(p.at(-1)!,npc.position))return stillAt(npc.position,"south",sceneId);
+  if(sceneId==="town"&&!npc.homeId ? p.length!==4||p.some((point,i)=>!same(point,expected[i])||!Number.isFinite(point.x)||!Number.isFinite(point.y)||point.x<0||point.x>MAP.width||point.y<0||point.y>MAP.height) : !validScenePath(sceneId,p)||!same(p[0],m.target)||!same(p.at(-1)!,npc.position))return stillAt(npc.position,"south",sceneId);
   const current=sample(m,now);
   // Rapid manual commits keep the unplayed old route, then the newly committed route.
   // There is no extrapolation, independent simulation or unbounded offline queue.
   const points=(current.moving?[current.position,...m.points.slice(current.segment+1),...p.slice(1)]:p).filter((point,i,all)=>i===0||!same(point,all[i-1]));
-  if(points.length>16)return stillAt(npc.position,current.facing,sceneId);
+  if(points.length>64)return stillAt(npc.position,current.facing,sceneId);
   const length=points.slice(1).reduce((sum,point,i)=>sum+distance(points[i],point),0);
   return {sceneId,target:{...npc.position},points:points.map(point=>({...point})),startedAt:now,duration:Math.min(3000,Math.max(400,length/0.15)),facing:current.facing};
 }

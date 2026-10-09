@@ -48,3 +48,6 @@ main .scene-frame.interior .scene{height:clamp(470px,calc(100dvh - 192px),740px)
 
 /* Indoor chat uses the same shallow dock; an absent resident keeps its draft hidden. */
 main .scene-frame.interior:has(.interaction-dock:not([hidden]) .scene-composer) .scene{height:clamp(360px,calc(100dvh - 357px),650px)}
+
+/* Expanded roster remains a compact horizontal strip rather than shrinking the map. */
+.residents>div{display:flex;overflow-x:auto;gap:8px;max-width:100%}.residents>div>button{flex:0 0 150px}.portrait:not(.aqing):not(.aning)::after{display:none}.portrait:not(.aqing):not(.aning){font-size:25px;background:#ded0ac}

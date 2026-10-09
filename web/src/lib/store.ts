@@ -1,5 +1,5 @@
 import { Pool } from "pg";
-import { advanceOnClock, restoreWorld, assertWorld, createWorld, giveFood, runState, AUTO_INTERVAL_MS, type World } from "./world";
+import { populateResidents, advanceOnClock, restoreWorld, assertWorld, createWorld, giveFood, runState, AUTO_INTERVAL_MS, type World } from "./world";
 
 const globals = globalThis as typeof globalThis & { townPool?: Pool };
 export function database(): Pool {
@@ -18,7 +18,8 @@ export async function readWorld(id = worldId()): Promise<World> {
   return decode(result.rows[0].payload);
 }
 export async function initializeWorld(id = worldId()): Promise<World> {
-  await database().query("INSERT INTO town_worlds(id, revision, payload) VALUES($1, 0, $2) ON CONFLICT (id) DO NOTHING", [id, JSON.stringify(createWorld())]);
+  const seed=process.env.WORLD_ROSTER==="legacy"?createWorld():{...populateResidents(createWorld()),revision:0};
+  await database().query("INSERT INTO town_worlds(id, revision, payload) VALUES($1, 0, $2) ON CONFLICT (id) DO NOTHING", [id, JSON.stringify(seed)]);
   return readWorld(id);
 }
 export async function tickWorld(expectedRevision: number, id = worldId()): Promise<World> {
@@ -73,3 +74,6 @@ async function updateWorld(id: string, change: (current: World, now: number) => 
     throw error;
   } finally { client.release(); }
 }
+
+// Explicit idempotent roster migration, using the same row-lock transaction as all mutations.
+export async function migrateResidents(id=worldId()):Promise<World>{return updateWorld(id,current=>populateResidents(current));}
