@@ -1,5 +1,6 @@
 import {buildingAt,buildingIn,portalById,nearPortal,HOME_REST,homePath,validScenePath,npcCafeSpawn,canStand,portalSpawn,type SceneId} from "./scene-data";
 import {TOWN_BUILDINGS} from "./town-map";
+import {observeEncounters,assertExperiences,type Experiences} from "./experiences";
 import {RESIDENTS} from "./residents";
 import {findScenePath} from "./navigation";
 export type LocationId = typeof TOWN_BUILDINGS[number]["id"] | "square";
@@ -13,7 +14,7 @@ export type Npc = {
 };
 export type TownEvent = { id: number; minute: number; npcId: Npc["id"]; text: string; reason: string };
 export type World = {
-  schemaVersion: 2; rosterVersion?:1; revision: number; name: string; minute: number;
+  schemaVersion: 2; rosterVersion?:1; experiences?:Experiences; revision: number; name: string; minute: number;
   run?: { running: boolean; nextTickAt: number | null };
   locations: { id: LocationId; name: string; use: string }[];
   npcs: Npc[]; events: TownEvent[];
@@ -171,6 +172,7 @@ export function advanceWorld(world: World): World {
     next.npcs[i] = n;
     next.events.push({ id: next.revision * 1000 + i, minute: next.minute, npcId: n.id, text: `${n.name} · ${n.action}`, reason: n.reason });
   }
+  observeEncounters(next);
   next.events = next.events.slice(-100);
   return next;
 }
@@ -223,6 +225,7 @@ export function assertWorld(value: unknown): asserts value is World {
   if (!w || w.schemaVersion !== 2 || !Number.isSafeInteger(w.revision) || w.revision < 0 || !Number.isSafeInteger(w.minute) || w.minute < 480 || (!Array.isArray(w.npcs)||w.npcs.length<2||w.npcs.length>30) || !Array.isArray(w.events) || (!Array.isArray(w.locations)||w.locations.length<3) || !LOCATIONS.every((l, i) => w.locations[i].id === l.id && w.locations[i].name === l.name && w.locations[i].use === l.use)) throw new Error("不兼容的世界存档");
   if (new Set(w.npcs.map(n => n.id)).size !== w.npcs.length) throw new Error("重复的居民存档");
   if (w.run !== undefined && (!w.run || typeof w.run.running !== "boolean" || (w.run.running ? !Number.isSafeInteger(w.run.nextTickAt) || w.run.nextTickAt! < 0 : w.run.nextTickAt !== null))) throw new Error("运行状态存档无效");
+  assertExperiences(w);
   for (const n of w.npcs) {
     if ((!/^[a-z][a-z0-9_-]{0,39}$/.test(n.id)||(!n.homeId&&!["aqing","aning"].includes(n.id))) || !["quiet", "outgoing"].includes(n.personality) || !w.locations.some(l => l.id === n.location) || [n.hunger, n.energy, n.mood].some(v => !Number.isFinite(v) || v < 0 || v > 100) || !validNpcPosition(n) || !Array.isArray(n.lastPath) || (!n.homeId&&n.sceneId==="cafe_interior"&&n.lastPath.length!==0) || (n.facing!==undefined&&!["north","south","east","west"].includes(n.facing)) || (n.sceneId==="home_interior"&&n.lastPath.length!==0&&(!validScenePath(n.sceneId,n.lastPath)||!samePoint(n.lastPath.at(-1),n.position))) || (n.homeId&&n.lastPath.length>0&&(!validScenePath(n.sceneId,n.lastPath)||!samePoint(n.lastPath.at(-1),n.position))) || n.lastPath.some(p=>!Number.isFinite(p.x)||!Number.isFinite(p.y))) throw new Error("居民存档无效");
   }
