@@ -2,7 +2,7 @@ import {STEP_MS,STEP_MINUTES,WALK_SPEED,pathLength,pathPoint,pathSection,actionD
 import {prepareWork,settleWork,assertWork,workPoint,helperPoint,helpTarget,taskName,type WorkTask,type WorkResult} from "./work";
 import {buildingAt,buildingIn,portalById,nearPortal,HOME_REST,homePath,validScenePath,npcCafeSpawn,canStand,portalSpawn,type SceneId} from "./scene-data";
 import {TOWN_BUILDINGS} from "./town-map";
-import {assertSocial,beginSocial,type PublicConversation} from "./social";
+import {assertSocial,beginSocial,advanceConversations,type PublicConversation} from "./social";
 import {observeEncounters,assertExperiences,type Experiences} from "./experiences";
 import {RESIDENTS} from "./residents";
 import {findScenePath} from "./navigation";
@@ -228,8 +228,10 @@ export function advanceWorld(world: World): World {
   if(Math.floor(next.minute/30)!==Math.floor(world.minute/30))
     next.npcs=next.npcs.map(n=>({...n,hunger:clamp(n.hunger+2),energy:clamp(n.energy-1),mood:clamp(n.mood-1)}));
   prepareWork(next);
+  const talking=advanceConversations(next);
   for (let i=0;i<next.npcs.length;i++) {
     let n=next.npcs[i];
+    if(talking.has(n.id))continue;
     if(!n.ongoing)n=beginAction(n,next);
     const result=progressAction(n,next);next.npcs[i]=result.npc;
     if(result.completed)next.events.push({id:next.revision*1000+i,minute:next.minute,npcId:n.id,text:`${n.name} · ${result.npc.action}`,reason:n.reason});

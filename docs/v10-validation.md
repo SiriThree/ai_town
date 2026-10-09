@@ -12,9 +12,15 @@
 
 [长途截图](../web/evidence/v10-life/motion/01-long-walk.png) · [暂停](../web/evidence/v10-life/motion/02-paused.png) · [慢CPU](../web/evidence/v10-life/motion/03-slow-cpu-walk.png) · [录屏](../web/evidence/v10-life/motion/long-walk.webm)。慢CPU是浏览器CPU节流，不是宣称固定低FPS。当前没有倍速产品功能，只验证固定1x与不按帧数推进；未假称高倍速验收。
 
-## V10.2
+## V10.2 有限自然交流
 
-进行中。
+实际原因：原系统只保存2句结果，无进行中的轮次；同时显示两泡且不占用居民行动。沿用原会话ID、触发、预算、关系记忆模块，新增timeline持久turnIndex/elapsedMs/completed；每句5秒，2句10秒，一次只显示当前说话人。双方在真实位置互相朝向，完成后继续决策；其他居民照常行动。阅读/短暂停留可以转为交谈，工作/休息/吃饭/走路不抢占，冷却120模拟分钟、每模拟日8次保持。已结束旧会话仅作历史。
+
+公开Fallback每句10–30字；模型提示同要求，grapheme计数处理emoji组合字符。超长模型回复不重试，改用本地短句并标注降级；未采用原文单独保存在公开记录，历史可展开，不裁成互不相关片段。按自然标点平衡换行。普通寒暄仅记录接触熟悉度，不再无条件增加trust；真实工作合作仍增加有来源的信任。私人聊天从不作为公开模型上下文。
+
+125测试/20文件、类型/lint/生产构建通过。`node --env-file=.env.test.local --import tsx scripts/v10-social-check.mjs`（EVIDENCE_DIR=evidence/v10-life/social-ordered）实际浏览器验证本机模型正常/503/超时，每种2次调用、正确第一/第二说话人、暂停时轮次不跳、角色停留、其他居民继续行动、历史与后端重启恢复。原测试曾假定阿晴先说，但实际会话首位是阿宁；已改为按会话turns读取身份，失败证据保留，非业务错误。
+
+[第一句](../web/evidence/v10-life/social-ordered/turn-1-normal.png) · [第二句](../web/evidence/v10-life/social-ordered/turn-2-normal.png) · [超时降级](../web/evidence/v10-life/social-ordered/turn-1-timeout.png) · [实际录屏](../web/evidence/v10-life/social-ordered/normal.webm)。模型均为标记清楚的本地测试替身，不是外部供应商验收。
 
 ## V10.3
 

@@ -1,3 +1,4 @@
+import {shortEnough} from "./dialogue-text";
 import {updateWorld,worldId} from "./store";
 import {modelReply,aiConfig,type AIConfig} from "./chat-model";
 import {reserveChatQuota} from "./chat-limits";
@@ -8,9 +9,9 @@ export async function socialReplies(c:PublicConversation,w:World,config:AIConfig
   const turns=[];
   for(let i=0;i<c.speakers.length;i++){
     const n=c.speakers[i],other=c.speakers[1-i];
-    const messages=buildMessages(n,{...w,minute:c.minute,events:w.events.filter(e=>e.minute<=c.minute)},[],`你正在与${other.name}在同一场景交流。只说一句简短自然的日常话，不代替对方发言。对方身份：${other.bio??other.personality}。${i?`对方刚说：${turns[0].reply}`:"主动问候对方，已知经历可以提及，不编造未知事情。"}`);
+    const messages=buildMessages(n,{...w,minute:c.minute,events:w.events.filter(e=>e.minute<=c.minute)},[],`你正在与${other.name}在同一场景交流。只说一句10–30个可见字符的简短中文日常话，不超过30字，不写人名标签，不分多段，不代替对方发言。对方身份：${other.bio??other.personality}。${i?`对方刚说：${turns[0].reply}`:"主动问候对方，已知经历可以提及，不编造未知事情。"}`);
     const reply=await modelReply(messages,()=>c.turns[i].reply,{...config,timeoutMs:Math.min(2000,config.timeoutMs)},transport,undefined,reserve);
-    turns.push({...reply,npcId:n.id});
+    turns.push(reply.source==="ai"&&!shortEnough(reply.reply)?{npcId:n.id,reply:c.turns[i].reply,source:"fallback" as const,reason:"invalid_response" as const,rejectedReply:reply.reply}:{...reply,npcId:n.id});
   }
   return turns;
 }
@@ -27,7 +28,7 @@ export async function enrichSocial(id=worldId()){
     const turns=await socialReplies(claimed,snapshot,aiConfig(),fetch,()=>reserveChatQuota(id,"model"));
     await updateWorld(id,w=>{
       const item=w.conversations?.find(c=>c.id===claimed!.id&&c.modelState==="claimed");if(!item)return w;
-      const next=structuredClone(w);const c=next.conversations!.find(c=>c.id===item.id)!;c.turns=turns;c.modelState="done";next.revision++;return next;
+      const next=structuredClone(w);const c=next.conversations!.find(c=>c.id===item.id)!;c.turns=c.turns.map((turn,i)=>c.timeline&&(c.timeline.completed||i<c.timeline.turnIndex)?turn:turns[i]);c.modelState="done";next.revision++;return next;
     });
   }catch{console.info("npc_social",{source:"fallback",reason:"enrichment_unavailable"});}
 }

@@ -163,7 +163,7 @@ export default function Town() {
       <dialog ref={dialog} className="paper log-dialog" onCancel={() => setPanel(null)}>
         <div className="panel-heading"><h2>小镇日志</h2><button autoFocus aria-label="关闭日志" onClick={() => setPanel(null)}>×</button></div>
         <p className="muted">最近 100 条已保存事件 · 新的在前</p>
-        <div className="log-list">{[...(world.conversations??[])].reverse().map(c=><article key={c.id} data-testid="public-conversation"><time>{worldTime(c.minute)} · 公开居民交流</time>{c.turns.map(t=><p key={t.npcId}><strong>{world.npcs.find(n=>n.id===t.npcId)?.name}：</strong>{t.reply}<small> [{t.source==="ai"?(t.testMode?"AI测试替身":"AI"):"本地降级"}]</small></p>)}</article>)}{world.events.length ? [...world.events].reverse().map(e => <article key={e.id}><time>{worldTime(e.minute)}</time><h3>{e.text}</h3><p>{e.reason}</p></article>) : <p>还没有发生事件。推进一步，看看居民的选择。</p>}</div>
+        <div className="log-list">{[...(world.conversations??[])].reverse().map(c=><article key={c.id} data-testid="public-conversation"><time>{worldTime(c.minute)} · 公开居民交流</time>{c.turns.map(t=><p key={t.npcId}><strong>{world.npcs.find(n=>n.id===t.npcId)?.name}：</strong>{t.reply}{t.rejectedReply&&<details><summary>未采用的超长模型原文</summary>{t.rejectedReply}</details>}<small> [{t.source==="ai"?(t.testMode?"AI测试替身":"AI"):"本地降级"}]</small></p>)}</article>)}{world.events.length ? [...world.events].reverse().map(e => <article key={e.id}><time>{worldTime(e.minute)}</time><h3>{e.text}</h3><p>{e.reason}</p></article>) : <p>还没有发生事件。推进一步，看看居民的选择。</p>}</div>
       </dialog>
     </> : <section className="loading-paper paper"><h2>翻开小镇手记</h2><p>{error ? "数据库连接尚未就绪，页面不会生成虚假的世界。" : "正在从后台读取居民的日常…"}</p></section>}
   </main>;

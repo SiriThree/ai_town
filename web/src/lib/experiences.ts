@@ -23,7 +23,7 @@ export function recordExperience(world:World,ids:string[],kind:ExperienceEvent["
   for(let i=0;i<ids.length;i++)for(let j=i+1;j<ids.length;j++){
     const [a,b]=[ids[i],ids[j]].sort();let r=relationFor(world,a,b);
     if(!r){r={a,b,familiarity:0,trust:0,lastEventId:e.id,lastMinute:e.minute};data.relations.push(r);}
-    r.familiarity=Math.min(100,r.familiarity+(kind==="work"?3:1));r.trust=Math.min(100,r.trust+(kind==="work"?2:kind==="conversation"?1:0));r.lastEventId=e.id;r.lastMinute=e.minute;
+    r.familiarity=Math.min(100,r.familiarity+(kind==="work"?3:1));r.trust=Math.min(100,r.trust+(kind==="work"?2:0));r.lastEventId=e.id;r.lastMinute=e.minute;
   }
   // Keep facts referenced by current memories/relationships even after the public log scrolls away.
   const references=new Set([...Object.values(data.memories).flat().map(m=>m.eventId),...data.relations.map(r=>r.lastEventId),...(world.conversations??[]).map(c=>c.eventId),...(world.workHistory??[]).map(r=>r.eventId)]);

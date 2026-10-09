@@ -56,3 +56,5 @@ main .scene-frame.interior:has(.interaction-dock:not([hidden]) .scene-composer) 
 .play-mode .place-label small{display:none}
 .play-mode .place-label{background:#f6eccfd9;box-shadow:none;padding:3px 7px;font-size:11px}
 .overview-mode .npc-target>span,.overview-mode .player-marker small{opacity:.65}
+
+.public-speech .speech-content p{white-space:pre-line;word-break:normal;overflow-wrap:anywhere;line-height:1.6;text-wrap:pretty}

@@ -1,6 +1,6 @@
 import {describe,it,expect} from "vitest";
 import {createWorld,populateResidents,advanceWorld} from "../src/lib/world";
-import {canTalk,beginSocial} from "../src/lib/social";
+import {canTalk,beginSocial,advanceConversations} from "../src/lib/social";
 import {socialReplies} from "../src/lib/social-service";
 import {modelReply,type AIConfig} from "../src/lib/chat-model";
 function meeting(){const w=populateResidents(createWorld());w.npcs=w.npcs.slice(0,2);for(const n of w.npcs)Object.assign(n,{hunger:0,energy:85,mood:50});return w;}
@@ -12,10 +12,10 @@ describe("bounded public social dialogue",()=>{
     expect(canTalk({...a,lastPath:[a.position]},b,w)).toBe(false);expect(canTalk({...a,energy:10},b,w)).toBe(false);
     beginSocial(w);const c=w.conversations![0];expect(c.turns).toHaveLength(2);expect(c.turns.every(t=>t.source==="fallback")).toBe(true);expect(canTalk(a,b,w)).toBe(false);
     beginSocial(w);expect(w.conversations).toHaveLength(1);expect(w.experiences!.relations[0].lastEventId).toBe(c.eventId);
-    w.minute+=120;w.revision++;beginSocial(w);expect(w.conversations).toHaveLength(2);
+    for(let i=0;i<10;i++)advanceConversations(w);w.minute+=120;w.revision++;beginSocial(w);expect(w.conversations).toHaveLength(2);
   });
   it("caps frequency even when manual callers fast-forward logical time",()=>{
-    const w=meeting();for(let i=0;i<12;i++){beginSocial(w);w.minute+=121;w.revision++;}
+    const w=meeting();for(let i=0;i<12;i++){beginSocial(w);for(let j=0;j<10;j++)advanceConversations(w);w.minute+=121;w.revision++;}
     const counts=new Map<number,number>();for(const c of w.conversations??[])counts.set(Math.floor(c.minute/1440),(counts.get(Math.floor(c.minute/1440))??0)+1);
     expect([...counts.values()].every(n=>n<=8)).toBe(true);
   });
