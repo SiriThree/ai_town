@@ -1,12 +1,12 @@
 "use client";
 import { useEffect,useRef,useState, type RefObject } from "react";
-import { enterPortal,movePlayer,nearbyPortal,newPlayer,PLAYER_KEY,playerPose,restorePlayer,type Player } from "../lib/player-scene";
+import { movePlayer,newPlayer,PLAYER_KEY,playerPose,restorePlayer,type Player } from "../lib/player-scene";
 
-export function usePlayer(viewport:RefObject<HTMLDivElement|null>,blocked:boolean,ready:boolean) {
+export function usePlayer(viewport:RefObject<HTMLDivElement|null>,blocked:boolean,ready:boolean,onInteract:(player:Player)=>Player) {
   const [player,setPlayer]=useState(newPlayer);
   const [pose,setPose]=useState(()=>playerPose(newPlayer(),false,0));
-  const current=useRef(player),block=useRef(blocked),loaded=useRef(ready);
-  useEffect(()=>{block.current=blocked;loaded.current=ready;},[blocked,ready]);
+  const current=useRef(player),block=useRef(blocked),loaded=useRef(ready),interact=useRef(onInteract);
+  useEffect(()=>{block.current=blocked;loaded.current=ready;interact.current=onInteract;},[blocked,ready,onInteract]);
   useEffect(()=>{
     const keys=new Set<string>();let frame=0,last=0,lastSave=0;
     const persist=()=>{try{sessionStorage.setItem(PLAYER_KEY,JSON.stringify(current.current));}catch{/* Avatar remains usable without browser storage. */}};
@@ -30,7 +30,7 @@ export function usePlayer(viewport:RefObject<HTMLDivElement|null>,blocked:boolea
       if(document.activeElement!==viewport.current&&document.activeElement!==document.body)return;
       if(key==="e"){
         e.preventDefault();if(e.repeat)return;
-        const portal=nearbyPortal(current.current);if(portal){stop();publish(enterPortal(current.current,portal.id));persist();}return;
+        stop();publish(interact.current(current.current));persist();return;
       }
       if(!["w","a","s","d","arrowup","arrowdown","arrowleft","arrowright"].includes(key))return;
       e.preventDefault();keys.add(key);if(!frame){last=performance.now();frame=requestAnimationFrame(tick);}

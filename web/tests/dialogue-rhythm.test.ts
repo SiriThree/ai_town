@@ -1,3 +1,4 @@
+import {fallbackReply} from "../src/lib/chat-context";
 import {describe,it,expect} from "vitest";
 import {advanceWorld,populateResidents,createWorld,assertWorld} from "../src/lib/world";
 import {beginSocial,advanceConversations,canTalk,TURN_MS} from "../src/lib/social";
@@ -30,6 +31,9 @@ describe("finite persisted public conversation turns",()=>{
     const transport:typeof fetch=async(_url,init)=>{calls++;seen.push(String(init?.body));return new Response(JSON.stringify({choices:[{message:{content:"这是一段超过三十个可见字符的很长很长的回答，不能作为小镇的短对白直接显示给玩家。"}}]}));};
     const result=await socialReplies(w.conversations![0],w,{enabled:true,key:"test",baseUrl:"http://127.0.0.1",model:"local",testMode:true,timeoutMs:1000},transport);
     expect(calls).toBe(2);expect(seen.every(s=>s.includes("不超过30字"))).toBe(true);expect(result.every(r=>r.source==="fallback"&&r.reason==="invalid_response"&&shortEnough(r.reply)&&"rejectedReply" in r)).toBe(true);
+  });
+  it("player local replies also stay short and keep current facts/personality",()=>{
+    const w=meeting();for(const n of w.npcs)for(const message of ["你好","你是谁","你现在在哪","你饿吗","想休息吗","心情如何","记得什么","去咖啡馆"]){expect(shortEnough(fallbackReply(n,w,message))).toBe(true);}
   });
   it("counts visible graphemes and balances punctuation lines without single-character tails",()=>{
     expect(visibleCharacters("👨‍👩‍👧‍👦你好")).toHaveLength(3);

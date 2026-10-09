@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { FALLBACK_LABELS, MAX_MESSAGE, type ChatTurn } from "../lib/chat-types";
 import { worldTime, type Npc } from "../lib/world";
 
-export default function SceneChat({ npc, onClose, onReply, onProfile, historyOpen, onHistory }: { npc: Npc; onClose: () => void; onReply: (turn: ChatTurn | null) => void; onProfile: () => void; historyOpen: boolean; onHistory: (open: boolean) => void }) {
+export default function SceneChat({ npc, available, onClose, onReply, onProfile, historyOpen, onHistory }: { available:boolean; npc: Npc; onClose: () => void; onReply: (turn: ChatTurn | null) => void; onProfile: () => void; historyOpen: boolean; onHistory: (open: boolean) => void }) {
   const replyCallback = useRef(onReply);
   useEffect(() => { replyCallback.current = onReply; }, [onReply]);
   const list = useRef<HTMLDivElement>(null);
@@ -42,7 +42,7 @@ export default function SceneChat({ npc, onClose, onReply, onProfile, historyOpe
   }
   async function send() {
     const message=draft.trim();
-    if(!message||sending.current||loading||error) return;
+    if(!available||!message||sending.current||loading||error) return;
     sending.current=true;setPending(true);setError("");
     try {
       const response=await fetch(endpoint,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({message}),signal:AbortSignal.timeout(25000)});
@@ -64,11 +64,12 @@ export default function SceneChat({ npc, onClose, onReply, onProfile, historyOpe
     <div className="composer-status" aria-live="polite" aria-busy={pending||loading}>
       {loading ? <p>正在翻开之前的对话…</p> : pending ? <p className="chat-wait" role="status">你：{draft.slice(0,60)}<span> · 已发送，{npc.name}正在想一想…</span></p> : latest ? <p className="player-preview" title={latest.message}><strong>你：</strong>{latest.message}<small> · 回复见角色头顶；镜头外可查看历史</small></p> : <p>向{npc.name}打个招呼吧。回复会出现在角色头顶。</p>}
     </div>
+    {!available&&<p className="chat-error">居民已离开交谈范围或正在忙碌；本次已发送消息仍会保存，靠近空闲居民后可继续。</p>}
     {error && <div className="chat-error" role="alert"><p>{error}</p><button onClick={reload} disabled={pending||loading}>重读记录</button></div>}
     <form onSubmit={e=>{e.preventDefault();void send();}}>
       <label className="sr-only" htmlFor="chat-message">想对{npc.name}说些什么？</label>
       <textarea ref={input} id="chat-message" rows={1} placeholder="你现在在干什么？" value={draft} maxLength={MAX_MESSAGE} disabled={loading||pending} onChange={e=>setDraft(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey&&!e.nativeEvent.isComposing){e.preventDefault();void send();}}} />
-      <button className="advance" type="submit" disabled={pending||loading||!draft.trim()||!!error}>{pending?"等待回复…":"发送消息"}</button>
+      <button className="advance" type="submit" disabled={!available||pending||loading||!draft.trim()||!!error}>{pending?"等待回复…":"发送消息"}</button>
     </form>
     <div className="composer-hint"><small>{draft.length}/{MAX_MESSAGE} · Enter 发送 / Shift+Enter 换行</small><small>本浏览器私聊 · 请勿输入敏感信息 · 打算不会改变世界</small></div>
   </section>;

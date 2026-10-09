@@ -21,7 +21,7 @@ export async function enrichSocial(id=worldId()){
   let claimed:PublicConversation|undefined;
   try{
     const snapshot=await updateWorld(id,w=>{
-      const item=w.conversations?.find(c=>c.modelState==="local"&&w.minute-c.minute<=20);if(!item)return w;
+      const item=w.conversations?.find(c=>c.modelState==="local"&&(!c.timeline||!c.timeline.completed)&&w.minute-c.minute<=20);if(!item)return w;
       const next=structuredClone(w),c=next.conversations!.find(c=>c.id===item.id)!;c.modelState="claimed";claimed=structuredClone(c);next.revision++;return next;
     });
     if(!claimed)return;

@@ -192,7 +192,7 @@ export function execute(npc: Npc, decision: Decision, world: World): Npc {
 // Start does not apply the preview's effects. Only settlement may change needs/location.
 function beginAction(n:Npc,w:World):Npc {
   const decision=decide(n,w),preview=execute(n,decision,w),path=preview.lastPath;
-  const ongoing:OngoingAction={id:`action:${w.revision}:${n.id}`,decision,sceneId:n.sceneId,startedMinute:w.minute,
+  const ongoing:OngoingAction={id:`action:${w.revision}:${n.id}`,decision,sceneId:n.sceneId,startedMinute:w.minute-STEP_MINUTES,
     elapsedMs:0,durationMs:actionDuration(decision.action.kind,path),path:structuredClone(path)};
   const label=path.length>1?`正在行走 · ${preview.action.replace(/^来到|^走到|^走向/,"")}`:
     decision.action.kind==="work"?`正在${taskName(n.job!)}（尚未完成）`:

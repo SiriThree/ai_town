@@ -1,0 +1,52 @@
+import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
+import { mkdir, writeFile } from "node:fs/promises";
+import { database, initializeWorld, readWorld, feedWorld, tickWorld, wakeWorld, setWorldRunning } from "../src/lib/store";
+import { advanceWorld, giveFood } from "../src/lib/world";
+if(new URL(process.env.DATABASE_URL||"").pathname!=="/ai_town_mvp_test")throw new Error("仅允许独立测试库");
+const id=`v10-db-${randomUUID()}`,checks:string[]=[];
+const dir=process.env.EVIDENCE_DIR || "evidence/v10-life/concurrency";
+await mkdir(dir,{recursive:true});
+async function makeDue(){await database().query("UPDATE town_worlds SET payload=jsonb_set(payload,'{run,nextTickAt}',to_jsonb(1::bigint)) WHERE id=$1",[id]);}
+try{
+  const seed=await initializeWorld(id);seed.npcs[0].hunger=70;await database().query("UPDATE town_worlds SET payload=$2 WHERE id=$1",[id,JSON.stringify(seed)]);
+  const fed=await feedWorld("aqing",seed.revision,id);
+  const controlId=`${id}-control`;await initializeWorld(controlId);await database().query("UPDATE town_worlds SET payload=$2 WHERE id=$1",[controlId,JSON.stringify(seed)]);
+  const control=await tickWorld(0,controlId),changed=await tickWorld(fed.revision,id);
+  assert.deepEqual(control.npcs[0].ongoing?.decision.action,{kind:"move",to:"cafe"});assert.equal(changed.npcs[0].ongoing?.decision.action.kind,"socialize");
+  checks.push("真实数据库控制变量：原种子去咖啡馆，送食物后下一步社交");
+  const duplicate=await Promise.allSettled([feedWorld("aqing",changed.revision,id),feedWorld("aqing",changed.revision,id)]);
+  assert.equal(duplicate.filter(r=>r.status==="fulfilled").length,1);
+  assert.equal((duplicate.find(r=>r.status==="rejected") as PromiseRejectedResult).reason.status,409);
+  const afterFeed=await readWorld(id);assert.equal(afterFeed.npcs[0].hunger,0);
+  await assert.rejects(()=>feedWorld("aqing",afterFeed.revision,id),{status:409});
+  await assert.rejects(()=>feedWorld("missing",afterFeed.revision,id),{status:404});
+  checks.push("重复送食物仅一次成功，饱足/不存在居民拒绝，失败不写入");
+  await setWorldRunning(true,afterFeed.revision,id);await makeDue();
+  const beforeWake=await readWorld(id);
+  const wakes=await Promise.all(Array.from({length:8},()=>wakeWorld(id)));
+  const afterWake=await readWorld(id);
+  assert.equal(afterWake.minute,beforeWake.minute+2);assert.equal(afterWake.revision,beforeWake.revision+1);
+  assert.ok(wakes.every(w=>w.revision===afterWake.revision));
+  checks.push("8个并发到期唤醒只推进一次；过期很久也不循环补算");
+  await database().query("UPDATE town_worlds SET payload=jsonb_set(payload,'{npcs,0,hunger}','20'::jsonb) WHERE id=$1",[id]);await makeDue();const raceBefore=await readWorld(id);
+  const race=await Promise.allSettled([feedWorld("aqing",raceBefore.revision,id),wakeWorld(id)]);
+  const raceAfter=await readWorld(id);
+  const expected=race[0].status==="fulfilled"?advanceWorld(giveFood(raceBefore,"aqing")):advanceWorld(raceBefore);
+  if(race[0].status==="rejected")assert.equal(race[0].reason.status,409);
+  assert.deepEqual(raceAfter.npcs,expected.npcs);assert.deepEqual(raceAfter.events,expected.events);assert.equal(raceAfter.revision,expected.revision);
+  checks.push("送食物与到期唤醒并发等同串行结果，无丢失更新");
+  await makeDue();const manualBefore=await readWorld(id);
+  const manual=await Promise.allSettled([tickWorld(manualBefore.revision,id),wakeWorld(id)]);
+  if(manual[0].status==="rejected")assert.equal(manual[0].reason.status,409);
+  const manualAfter=await readWorld(id);assert.equal(manualAfter.minute,manualBefore.minute+2);
+  checks.push("手动与到期唤醒竞态仅推进一步，手动重排下一次到期");
+  const paused=await setWorldRunning(false,0,id); // stale pause still applies to the latest state
+  await assert.rejects(()=>setWorldRunning(true,manualBefore.revision,id),{status:409});
+  await Promise.all(Array.from({length:8},()=>wakeWorld(id)));
+  assert.deepEqual(await readWorld(id),paused);
+  assert.deepEqual(await initializeWorld(id),paused);
+  checks.push("过期版本也能暂停；延迟启动被拒绝，暂停后的8次唤醒无操作，初始化不重置");
+  await writeFile(`${dir}/db-result.json`,JSON.stringify({id,controlId,checks,decisionEvidence:{seed:seed.npcs[0],afterFood:fed.npcs[0],withoutFoodNext:control.npcs[0],withFoodNext:changed.npcs[0]},concurrentFeedWon:race[0].status==="fulfilled",finalWorld:paused},null,2));
+  console.log(`${checks.length} V10 database groups passed.`);
+}finally{await database().end();}

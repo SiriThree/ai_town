@@ -38,6 +38,11 @@ try{
   }
   assert.equal(samples.at(-1).scene,"reed_interior");await cdp.send("Emulation.setCPUThrottlingRate",{rate:1});
   const now=await get();const final=await post("/api/world/run",{running:false,expectedRevision:now.revision});
+  await delay(1300);await a.getByRole("button",{name:"复位",exact:true}).click();
+  await a.getByTestId("scene-viewport").focus();await a.keyboard.down("a");await a.waitForFunction(()=>Number(document.querySelector('[data-testid="player"]').dataset.x)<=520);await a.keyboard.up("a");await a.keyboard.down("s");await delay(100);await a.keyboard.up("s");
+  await expect(a.getByTestId("interaction-hint")).toHaveAttribute("data-kind","npc");await a.keyboard.press("e");await expect(a.getByTestId("scene-composer")).toBeVisible();await a.locator("textarea").fill("你现在在干什么？");await a.getByRole("button",{name:"发送消息",exact:true}).click();await expect(a.getByTestId("reply-source")).toContainText("降级回复");await a.screenshot({path:`${dir}/05-no-key-nearby-chat.png`,fullPage:true});
+  await a.keyboard.press("Escape");await a.keyboard.down("d");await delay(500);await a.keyboard.up("d");await a.screenshot({path:`${dir}/06-continue-exploring.png`,fullPage:true});
+  results.push("one uninterrupted recording also covers public short dialogue, no-key player E chat, Esc and resumed exploration");
   results.push("real long route enters through reed portal under 6x CPU throttling; fixed 1x simulation, no speed selector");
   assert.equal(errors.length,0);await writeFile(`${dir}/result.json`,JSON.stringify({id,results,samples,errors,paidCalls:0,finalRevision:final.revision},null,2));
   const video=a.video();await context.close();context=null;await rename(await video.path(),`${dir}/long-walk.webm`);console.log("V10 continuous browser passed",results);

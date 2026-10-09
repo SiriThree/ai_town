@@ -58,3 +58,5 @@ main .scene-frame.interior:has(.interaction-dock:not([hidden]) .scene-composer) 
 .overview-mode .npc-target>span,.overview-mode .player-marker small{opacity:.65}
 
 .public-speech .speech-content p{white-space:pre-line;word-break:normal;overflow-wrap:anywhere;line-height:1.6;text-wrap:pretty}
+
+.npc-target.interaction-focus{outline:2px dashed #fff0aa;outline-offset:5px}.notice-focus{position:absolute;color:#fff0aa;font-size:36px;transform:translate(-50%,-100%)}.interaction-feedback{position:absolute;bottom:70px;left:50%;transform:translateX(-50%);z-index:8;background:#fff1ce;border:2px solid #88653b;padding:6px 12px;pointer-events:none;max-width:70%}.speech-content [data-testid="chat-reply"]{white-space:pre-line;text-wrap:pretty}

@@ -41,6 +41,7 @@ export function beginSocial(world:World){
       b.personality==="quiet"?"嗯，慢慢聊一会儿，我很愿意听。":"好呀，见到你真高兴！最近还顺利吗？"];
     const c:PublicConversation={id,eventId:event.id,minute:world.minute,sceneId:a.sceneId,participants:[a.id,b.id],speakers:structuredClone([a,b]),turns:[a,b].map((n,i)=>({npcId:n.id,reply:lines[i],source:"fallback",reason:"disabled"})),modelState:"local",timeline:{turnIndex:0,elapsedMs:0,completed:false}};
     for(const n of [a,b]){delete n.ongoing;n.lastPath=[];n.action=`与${n.id===a.id?b.name:a.name}交谈 · 第1/2句`;const other=n.id===a.id?b:a;n.facing=other.position.x>n.position.x?"east":"west";}
+    c.speakers=structuredClone([a,b]);
     world.conversations=[...prior,c].slice(-30);world.socialBudget={day,used:world.socialBudget?.day===day?world.socialBudget.used+1:1};return;
   }
 }

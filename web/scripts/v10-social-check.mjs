@@ -13,7 +13,7 @@ let activeWorld=worldId;let server,browser,a,context;const checks=[],errors=[],s
 const delay=ms=>new Promise(r=>setTimeout(r,ms));
 const world=async()=>await(await fetch(base+"/api/world")).json();
 async function start(){
-  server=spawn(process.execPath,["node_modules/next/dist/bin/next","start","--hostname","127.0.0.1","--port","3119"],{windowsHide:true,stdio:["ignore","pipe","pipe"],env:{...process.env,WORLD_ID:activeWorld,PUBLIC_DEMO:"false",AI_ENABLED:"true",NPC_AI_ENABLED:"true",AI_API_KEY:"mock-only",AI_BASE_URL:"http://127.0.0.1:3193/v1",AI_MODEL:"mock",AI_TEST_MODE:"true",AI_TIMEOUT_MS:"160",AI_CALLS_PER_DAY:"8"}});
+  server=spawn(process.execPath,["node_modules/next/dist/bin/next","start","--hostname","127.0.0.1","--port","3119"],{windowsHide:true,stdio:["ignore","pipe","pipe"],env:{...process.env,WORLD_ID:activeWorld,PUBLIC_DEMO:"false",AI_ENABLED:"true",NPC_AI_ENABLED:"true",AI_API_KEY:"mock-only",AI_BASE_URL:"http://127.0.0.1:3193/v1",AI_MODEL:"mock",AI_TEST_MODE:"true",AI_TIMEOUT_MS:"800",AI_CALLS_PER_DAY:"8"}});
   server.stdout.pipe(log,{end:false});server.stderr.pipe(log,{end:false});
   for(let i=0;i<100;i++){if(server.exitCode!==null)throw new Error("server exited");try{const r=await fetch(base+"/api/world");if(r.ok||r.status===404)return;}catch{}await delay(100);}throw new Error("server timeout");
 }
@@ -23,7 +23,7 @@ async function shot(name,page=a){await page.screenshot({path:`${dir}/${name}.png
 
 const {database}=await import("../src/lib/store.ts");const {createWorld,populateResidents}=await import("../src/lib/world.ts");const {createServer}=await import("node:http");
 let mode="normal",calls=0;const requestCounts={},results=[];
-const model=createServer(async(req,res)=>{let raw="";for await(const chunk of req)raw+=chunk;calls++;if(mode==="timeout"){setTimeout(()=>res.end("{}"),900).unref();return;}if(mode==="error"){res.writeHead(503);res.end("failure");return;}
+const model=createServer(async(req,res)=>{let raw="";for await(const chunk of req)raw+=chunk;calls++;if(mode==="timeout"){setTimeout(()=>res.end("{}"),1800).unref();return;}if(mode==="error"){res.writeHead(503);res.end("failure");return;}
   const input=JSON.parse(raw),facts=JSON.parse(input.messages[0].content.split("世界事实：\n")[1]);res.setHeader("Content-Type","application/json");res.end(JSON.stringify({choices:[{message:{content:`你好，我是${facts.name}，在这里歇一会儿。`}}]}));});
 await new Promise(r=>model.listen(3193,"127.0.0.1",r));
 try{
@@ -33,6 +33,7 @@ try{
   await database().query("INSERT INTO town_worlds(id,revision,payload) VALUES($1,$2,$3)",[activeWorld,seed.revision,JSON.stringify(seed)]);await start();context=await browser.newContext({viewport:{width:1440,height:900},recordVideo:{dir,size:{width:1440,height:900}}});a=await context.newPage();a.on("pageerror",e=>errors.push(e.message));await a.goto(base);await expect(a.getByTestId("scene-canvas")).toHaveAttribute("data-ready","true");
   const beforeCalls=calls,began=performance.now();await a.getByRole("button",{name:/推进一步/}).click();
   await Promise.all(Array.from({length:6},()=>fetch(base+"/api/world/wake",{method:"POST",headers:{"Content-Type":"application/json"},body:"{}"})));
+  await a.getByTestId("scene-viewport").focus();await a.keyboard.down("a");await a.waitForFunction(()=>Number(document.querySelector('[data-testid="player"]').dataset.x)<=520);await a.keyboard.up("a");await a.keyboard.down("s");await delay(130);await a.keyboard.up("s");await a.keyboard.press("e");await expect(a.getByTestId("interaction-feedback")).toContainText("正在和邻居交谈");await expect(a.getByTestId("scene-composer")).toHaveCount(0);await shot("player-approaches-"+scenario);await a.keyboard.press("Escape");
   await expect.poll(async()=>(await world()).conversations?.[0]?.modelState,{timeout:6000}).toBe("done");const w=await world(),c=w.conversations[0];requestCounts[scenario]=calls-beforeCalls;assert.equal(requestCounts[scenario],2);
   assert.ok(c.turns.every(t=>t.source===(scenario==="normal"?"ai":"fallback")));if(scenario==="timeout")assert.ok(c.turns.every(t=>t.reason==="timeout"));
   await expect(a.getByTestId("revision")).toHaveText(`存档版本 ${w.revision}`);

@@ -90,6 +90,6 @@ describe("reusable buildings and real home rest",()=>{
     expect(npcPlace(n,w)).toBe("暖灯小屋 · 室内");expect(residentScene(n)).toBe("home_interior");
     const facts=JSON.parse(buildMessages(n,w,[],"现在在哪")[0].content.split("世界事实：\n")[1]);
     expect(facts).toMatchObject({sceneId:"home_interior",position:HOME_REST.aning.position,action:"在床边休息"});
-    expect(fallbackReply(n,w,"现在在哪")).toContain("暖灯小屋 · 室内");expect(w).toEqual(before);
+    expect(fallbackReply(n,w,"现在在哪")).toContain("暖灯小屋室内");expect(w).toEqual(before);
   });
 });

@@ -4,24 +4,35 @@ import { useEffect, useRef, useState, type CSSProperties } from "react";
 import type { Application,Container } from "pixi.js";
 import type { ResidentArt } from "./scene-art";
 import { usePlayer } from "./use-player";
-import { nearbyPortal, SCENES, residentScene, type SceneId } from "../lib/player-scene";
+import { enterPortal, SCENES, residentScene, type SceneId } from "../lib/player-scene";
 import { ART_PIXEL, acceptPosition, poseAt, stillAt, type Motion, type Pose } from "../lib/scene-motion";
 import { FALLBACK_LABELS, type ChatTurn } from "../lib/chat-types";
 import { boundedCamera, followPlayer, overviewCamera, bubblePlacement, sceneTransform, type Camera } from "../lib/scene-view";
 import {TOWN_BUILDINGS} from "../lib/town-map";
+import {interactionTarget,nearbyResidents,NOTICE_BOARD} from "../lib/interaction";
 import {INTERIORS} from "../lib/scene-data";
 import { MAP, runState, worldTime, type World } from "../lib/world";
 
-export default function TownScene({ world, selected, onSelect, speech, onExpand, onPublicHistory, controlsBlocked, onSceneChange }: { onPublicHistory:()=>void; controlsBlocked:boolean; onSceneChange:(id:SceneId)=>void; world: World; selected: string; onSelect: (id: string) => void; speech: ChatTurn | null; onExpand: () => void }) {
+export default function TownScene({ world, selected, onSelect, speech, onExpand, onPublicHistory, onTalk, onNearChange, controlsBlocked, onSceneChange }: { onTalk:(id:string)=>void; onNearChange:(ids:string)=>void; onPublicHistory:()=>void; controlsBlocked:boolean; onSceneChange:(id:SceneId)=>void; world: World; selected: string; onSelect: (id: string) => void; speech: ChatTurn | null; onExpand: () => void }) {
   const viewport = useRef<HTMLDivElement>(null);
   const [renderReady,setRenderReady]=useState(false);
-  const {player,pose:heroPose}=usePlayer(viewport,controlsBlocked,renderReady);
+  const [poses,setPoses]=useState<Record<string,Pose>>(()=>Object.fromEntries(world.npcs.map(n=>[n.id,poseAt(stillAt(n.position),0)])));
+  const positions=Object.fromEntries(Object.entries(poses).map(([id,p])=>[id,p.position]));
+  const {player,pose:heroPose}=usePlayer(viewport,controlsBlocked,renderReady,p=>{
+    const target=interactionTarget(p,world.npcs,positions);if(!target)return p;
+    if(target.kind==="portal")return enterPortal(p,target.id);
+    if(target.kind==="notice"){onPublicHistory();return p;}
+    onTalk(target.id);const dx=target.position.x-p.position.x,dy=target.position.y-p.position.y;
+    return {...p,facing:Math.abs(dx)>Math.abs(dy)?(dx>0?"east":"west"):(dy>0?"south":"north")};
+  });
   const sceneId=player.sceneId;
   const dimensions=SCENES[sceneId].size;
-  const portal=nearbyPortal(player);
+  const target=interactionTarget(player,world.npcs,positions);
+  const nearby=nearbyResidents(player,world.npcs,positions).map(n=>n.id).sort().join(",");
+  useEffect(()=>onNearChange(nearby),[nearby,onNearChange]);
   const [size, setSize] = useState({width:960,height:600});
   const [camera, setCamera] = useState<Camera>({zoom:1,x:0,y:0});
-  const [poses,setPoses]=useState<Record<string,Pose>>(()=>Object.fromEntries(world.npcs.map(n=>[n.id,poseAt(stillAt(n.position),0)])));
+
   const cameras=useRef<Record<SceneId,Camera>>(Object.fromEntries(Object.keys(SCENES).map(id=>[id,{zoom:1,x:0,y:0}])) as Record<SceneId,Camera>);
   const cameraScene=useRef<SceneId>("town");
   useEffect(()=>{
@@ -141,15 +152,16 @@ export default function TownScene({ world, selected, onSelect, speech, onExpand,
     <div ref={host} className="canvas-host" data-testid="scene-canvas" style={{left:transform.x,top:transform.y,width:dimensions.width*transform.scale,height:dimensions.height*transform.scale}} />
     <div className="world-plane" data-testid="world-plane" style={{width:dimensions.width,height:dimensions.height,transform:`translate(${transform.x}px, ${transform.y}px) scale(${transform.scale})`}}>
       {sceneId==="town" && <>{TOWN_BUILDINGS.map(b=><div key={b.id} className="place-label" style={{left:b.x,top:b.labelY,transform:"translateX(-50%)"}}>{b.name}<small>{b.use}</small></div>)}<div className="place-label" style={{left:480,top:492,transform:"translateX(-50%)"}}>树荫广场<small>社交 · 阅读</small></div></>}
-      {world.npcs.filter(n=>residentScene(n)===sceneId).map(n => <button key={n.id} aria-label={`查看${n.name}`} aria-pressed={selected === n.id} data-testid={`npc-${n.id}`} data-motion={poses[n.id]?.moving?"walking":"idle"} data-facing={poses[n.id]?.facing} data-frame={poses[n.id]?.frame} className={`npc-target ${selected === n.id ? "selected" : ""}`} style={{ left:poses[n.id]?.position.x ?? n.position.x,top:poses[n.id]?.position.y ?? n.position.y }} onClick={() => onSelect(n.id)}><span>{n.name}</span></button>)}
+      {world.npcs.filter(n=>residentScene(n)===sceneId).map(n => <button key={n.id} aria-label={`查看${n.name}`} aria-pressed={selected === n.id} data-testid={`npc-${n.id}`} data-motion={poses[n.id]?.moving?"walking":"idle"} data-facing={poses[n.id]?.facing} data-frame={poses[n.id]?.frame} className={`npc-target ${selected === n.id ? "selected" : ""} ${target?.kind==="npc"&&target.id===n.id?"interaction-focus":""}`} style={{ zIndex:Math.round(poses[n.id]?.position.y??n.position.y),left:poses[n.id]?.position.x ?? n.position.x,top:poses[n.id]?.position.y ?? n.position.y }} onClick={() => onSelect(n.id)}><span>{n.name}</span></button>)}
       <span className="player-marker" data-testid="player" data-scene={sceneId} data-x={player.position.x.toFixed(2)} data-y={player.position.y.toFixed(2)} data-facing={heroPose.facing} data-motion={heroPose.moving?"walking":"idle"} style={{left:heroPose.position.x,top:heroPose.position.y}}><small>你</small></span>
-      {SCENES[sceneId].portals.map(p=><span key={p.id} className={`door-marker ${portal?.id===p.id?"near":""}`} style={{left:p.position.x,top:p.position.y}} aria-hidden>◇</span>)}
+      {sceneId==="town"&&target?.kind==="notice"&&<span className="notice-focus" style={{left:NOTICE_BOARD.x,top:NOTICE_BOARD.y}} aria-hidden>◇</span>}
+      {SCENES[sceneId].portals.map(p=><span key={p.id} className={`door-marker ${target?.kind==="portal"&&target.id===p.id?"near":""}`} style={{left:p.position.x,top:p.position.y}} aria-hidden>◇</span>)}
     </div>
     {error && <p role="alert" className="scene-error">{error}</p>}
     <div className="map-caption"><span>{SCENES[sceneId].name}</span><small>{sceneId==="town"?(transform.scale<.75?"全景用于看布局 · 复位回到游玩镜头":"游玩视角 · 沿街散步，走进居民的生活。"):INTERIORS[sceneId].caption}</small></div>
     <div className="camera-tools" aria-label="地图镜头"><button aria-label="缩小地图" disabled={camera.zoom<=.25/baseScale} onClick={()=>zoom(-.25)}>−</button><output aria-label="地图缩放">{Math.round(transform.scale/baseScale*100)}%</output><button aria-label="放大地图" disabled={camera.zoom>=2.5} onClick={()=>zoom(.25)}>＋</button><button onClick={()=>setCamera(overviewCamera(size,sceneId))}>全景</button><button onClick={()=>setCamera(sceneId==="town"?followPlayer(player.position,size,{zoom:1,x:0,y:0},sceneId):{zoom:1,x:0,y:0})}>复位</button></div>
     {bubble && speaker && speech && <aside className="speech-bubble" data-testid="speech-bubble" data-npc={speaker.id} aria-label={`${speaker.name}的发言`} style={{left:bubble.left,top:bubble.top,width:bubble.width,height:bubble.height,"--tail-x":`${bubble.tail}px`} as CSSProperties}>
-      <div className="speech-content" aria-live="polite"><div className="reply-heading"><strong>{speaker.name}</strong><span data-testid="reply-source" className={`source-badge ${speech.source}`}>{speech.source==="ai"?(speech.testMode?"AI · 本地测试替身":"AI 回复"):`降级回复 · ${FALLBACK_LABELS[speech.reason!] || "本地规则"}`}</span></div><p data-testid="chat-reply">{speech.reply}</p><small>{worldTime(speech.minute)} · {speech.worldRevision===world.revision?"本次状态":"历史发言 · 世界已更新"}</small><button onClick={onExpand}>展开全文与历史 ↗</button></div>
+      <div className="speech-content" aria-live="polite"><div className="reply-heading"><strong>{speaker.name}</strong><span data-testid="reply-source" className={`source-badge ${speech.source}`}>{speech.source==="ai"?(speech.testMode?"AI · 本地测试替身":"AI 回复"):`降级回复 · ${FALLBACK_LABELS[speech.reason!] || "本地规则"}`}</span></div><p data-testid="chat-reply">{bubbleText(speech.reply)}</p><small>{worldTime(speech.minute)} · {speech.worldRevision===world.revision?"本次状态":"历史发言 · 世界已更新"}</small><button onClick={onExpand}>展开全文与历史 ↗</button></div>
       <i className="bubble-tail" aria-hidden />
     </aside>}
     {!bubble&&publicConversation?.turns.filter((_,i)=>i===publicConversation.timeline?.turnIndex).map((turn)=>{
@@ -163,6 +175,6 @@ export default function TownScene({ world, selected, onSelect, speech, onExpand,
         <div className="speech-content"><div className="reply-heading"><strong>{n.name}</strong><small>{turn.source==="ai"?(turn.testMode?"AI·测试替身":"AI") : "本地交流"}</small></div><p>{bubbleText(turn.reply)}</p><button onClick={onPublicHistory}>居民交流全文 ↗</button></div><i className="bubble-tail" aria-hidden />
       </aside>;
     })}
-    <div className="player-controls" data-testid="player-controls">{portal?<strong data-testid="portal-hint">E · {portal.label}</strong>:<span>WASD / 方向键走动 · 靠近门口按 E</span>}<small>{sceneId==="town"?"点击地面控制化身 · 拖动平移 · 点击居民对话":"只显示此处的居民 · 下方出口返回对应门前"}</small></div>
+    <div className="player-controls" data-testid="player-controls">{target?<strong data-testid={target.kind==="portal"?"portal-hint":"interaction-hint"} data-target={target.id} data-kind={target.kind}>E · {target.label}</strong>:<span>WASD / 方向键走动 · 靠近居民、门口或告示按 E</span>}<small>{sceneId==="town"?"拖动平移 · 点击居民看档案 · E 交谈 · Esc 结束":"只显示此处的居民 · 下方出口返回对应门前"}</small></div>
   </div>;
 }
