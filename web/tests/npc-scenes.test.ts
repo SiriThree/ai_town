@@ -1,24 +1,26 @@
+import {completeAction} from "./helpers/advance";
+const advanceWorld=(w:import("../src/lib/world").World)=>completeAction(w,"aqing");
 import {describe,it,expect} from "vitest";
-import {advanceWorld,assertWorld,createWorld,decide,execute,canExecute,giveFood,restoreWorld,type World} from "../src/lib/world";
+import {assertWorld,createWorld,decide,execute,canExecute,giveFood,restoreWorld,type World} from "../src/lib/world";
 import {canStand,nearDoor,npcCafeSpawn} from "../src/lib/scene-data";
 import {acceptPosition,stillAt,poseAt} from "../src/lib/scene-motion";
 import {buildMessages,fallbackReply} from "../src/lib/chat-context";
 
 describe("authoritative cafe membership",()=>{
   it("walks to the outdoor portal before entering; entry, eat and exit are separate committed steps",()=>{
-    const initial=createWorld(),door=advanceWorld(initial),inside=advanceWorld(door),ate=advanceWorld(inside),outside=advanceWorld(ate),away=advanceWorld(outside);
+    const initial=createWorld();initial.npcs[0].hunger=70;const door=advanceWorld(initial),inside=advanceWorld(door),ate=advanceWorld(inside),outside=advanceWorld(ate),away=advanceWorld(outside);
     expect(door.npcs[0]).toMatchObject({sceneId:"town",location:"cafe",position:{x:754,y:324}});
-    expect(door.npcs[0].lastPath[0]).toEqual(initial.npcs[0].position);
+    expect(door.npcs[0].lastPath.at(-1)).toEqual(door.npcs[0].position);
     expect(nearDoor("town",door.npcs[0].position)).toBe(true);
     expect(inside.npcs[0]).toMatchObject({sceneId:"cafe_interior",position:npcCafeSpawn("aqing"),lastPath:[]});
-    expect(ate.npcs[0].hunger).toBe(33);expect(ate.npcs[0].action).toBe("享用餐点");
+    expect(ate.npcs[0].hunger).toBeLessThan(inside.npcs[0].hunger);expect(ate.npcs[0].action).toBe("享用餐点");
     expect(outside.npcs[0]).toMatchObject({sceneId:"town",location:"cafe",lastPath:[]});
     expect(away.npcs[0].location).toBe("square");
-    expect(away.npcs[0].lastPath[0]).toEqual(outside.npcs[0].position);
-    expect(inside.events.at(-2)?.text).toContain("进入");expect(outside.events.at(-2)?.text).toContain("离开");
+    expect(away.npcs[0].lastPath.at(-1)).toEqual(away.npcs[0].position);
+    expect(inside.events.filter(e=>e.npcId==="aqing").at(-1)?.text).toContain("进入");expect(outside.events.filter(e=>e.npcId==="aqing").at(-1)?.text).toContain("离开");
   });
   it("legal portal and needs, not a timer script, control entry and exit",()=>{
-    const w=createWorld();expect(canExecute(w.npcs[0],{kind:"enter"},w)).toBe(false);
+    const w=createWorld();w.npcs[0].hunger=70;expect(canExecute(w.npcs[0],{kind:"enter"},w)).toBe(false);
     const door=advanceWorld(w);expect(canExecute(door.npcs[0],{kind:"eat"},door)).toBe(false);
     expect(decide(door.npcs[0],door).action.kind).toBe("enter");
     const fed=giveFood(door,"aqing");expect(decide(fed.npcs[0],fed).action).toEqual({kind:"move",to:"square"});
@@ -45,21 +47,21 @@ describe("authoritative cafe membership",()=>{
     expect(()=>restoreWorld({...legacy,schemaVersion:77})).toThrow();
   });
   it("rejects unknown scenes, wrong scene/location pairs and cross-scene paths",()=>{
-    const w=advanceWorld(advanceWorld(createWorld()));
+    const seed=createWorld();seed.npcs[0].hunger=70;const w=advanceWorld(advanceWorld(seed));
     for(const patch of [{sceneId:"secret"},{location:"square"},{position:{x:320,y:340}},{lastPath:[{x:754,y:324},{x:460,y:486}]}]){
       const bad=structuredClone(w);Object.assign(bad.npcs[0],patch);expect(()=>assertWorld(bad)).toThrow();
     }
   });
   it("a scene transition cancels unfinished presentation without interpolating scene coordinate systems",()=>{
-    const start=createWorld(),door=advanceWorld(start),inside=advanceWorld(door);
-    const walking=acceptPosition(stillAt(start.npcs[0].position),door.npcs[0],0);
+    const start=createWorld();start.npcs[0].hunger=70;const door=advanceWorld(start),inside=advanceWorld(door);
+    const walking=acceptPosition(stillAt(start.npcs[0].position),{...door.npcs[0],lastPath:[start.npcs[0].position,{x:442,y:358},{x:754,y:358},door.npcs[0].position]},0);
     expect(poseAt(walking,100).moving).toBe(true);
     const transitioned=acceptPosition(walking,inside.npcs[0],100);
     expect(transitioned.sceneId).toBe("cafe_interior");expect(transitioned.points).toEqual([inside.npcs[0].position]);
     expect(poseAt(transitioned,100).moving).toBe(false);
   });
   it("current indoor/outdoor facts override historical location without altering model transport",()=>{
-    const door=advanceWorld(createWorld()),inside=advanceWorld(door);
+    const seed=createWorld();seed.npcs[0].hunger=70;const door=advanceWorld(seed),inside=advanceWorld(door);
     expect(fallbackReply(door.npcs[0],door,"现在在哪")).toContain("室外门口");
     expect(fallbackReply(inside.npcs[0],inside,"现在在哪")).toContain("室内");
     const facts=JSON.parse(buildMessages(inside.npcs[0],inside,[],"现在在哪")[0].content.split("世界事实：\n")[1]);

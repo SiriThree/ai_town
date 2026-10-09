@@ -9,7 +9,7 @@ import { FALLBACK_LABELS, type ChatTurn } from "../lib/chat-types";
 import { boundedCamera, followPlayer, overviewCamera, bubblePlacement, sceneTransform, type Camera } from "../lib/scene-view";
 import {TOWN_BUILDINGS} from "../lib/town-map";
 import {INTERIORS} from "../lib/scene-data";
-import { MAP, worldTime, type World } from "../lib/world";
+import { MAP, runState, worldTime, type World } from "../lib/world";
 
 export default function TownScene({ world, selected, onSelect, speech, onExpand, onPublicHistory, controlsBlocked, onSceneChange }: { onPublicHistory:()=>void; controlsBlocked:boolean; onSceneChange:(id:SceneId)=>void; world: World; selected: string; onSelect: (id: string) => void; speech: ChatTurn | null; onExpand: () => void }) {
   const viewport = useRef<HTMLDivElement>(null);
@@ -121,7 +121,7 @@ export default function TownScene({ world, selected, onSelect, speech, onExpand,
           motions.set(n.id,stillAt(n.position,n.facing??"south",n.sceneId));sceneObjects.addChild(actor.node);membershipChanged=true;
         }
         if(membershipChanged){setPoses(Object.fromEntries([...motions].map(([id,m])=>[id,poseAt(m,now)])));localApp!.render();host.current!.dataset.objects=String(sceneObjects.children.length);}
-        nextWorld.npcs.filter(n=>motions.has(n.id)).forEach(n=>motions.set(n.id,acceptPosition(motions.get(n.id)!,n,now)));
+        nextWorld.npcs.filter(n=>motions.has(n.id)).forEach(n=>motions.set(n.id,runState(nextWorld).running?acceptPosition(motions.get(n.id)!,n,now):stillAt(n.position,n.facing??"south",n.sceneId)));
         if(!animationFrame)animationFrame=requestAnimationFrame(paint);
       }};
       setPoses(Object.fromEntries([...motions].map(([id,m])=>[id,poseAt(m,performance.now())])));

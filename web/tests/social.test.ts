@@ -26,7 +26,7 @@ describe("bounded public social dialogue",()=>{
   });
   it("timeout yields usable lines while world rules continue independently",async()=>{
     const w=meeting();beginSocial(w);const transport:typeof fetch=async(_url,init)=>new Promise((_,reject)=>init!.signal!.addEventListener("abort",()=>reject(new Error("timeout"))));
-    const pending=socialReplies(w.conversations![0],w,config,transport);const next=advanceWorld(w);expect(next.minute).toBe(w.minute+10);
+    const pending=socialReplies(w.conversations![0],w,config,transport);const next=advanceWorld(w);expect(next.minute).toBe(w.minute+2);
     const result=await pending;expect(result.every(t=>t.source==="fallback"&&t.reason==="timeout"&&t.reply.length>10)).toBe(true);
   });
   it("shares two model slots with private dialogue and refuses excess calls",async()=>{

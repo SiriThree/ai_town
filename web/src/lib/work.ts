@@ -12,7 +12,7 @@ export function prepareWork(w:World){
     if(!n.job)continue;
     if(!n.workTask||(n.workTask.phase==="completed"&&w.minute-n.workTask.completedMinute!>=180))
       n.workTask={id:`work:${n.id}:${w.revision}`,kind:n.job,progress:0,phase:"active",createdMinute:w.minute};
-    if(n.workTask.phase!=="completed")n.workTask.phase=n.energy<35||n.hunger>=65?"paused":"active";
+    if(n.workTask.phase!=="completed" && n.ongoing?.decision.action.kind!=="work")n.workTask.phase=n.energy<35||n.hunger>=65?"paused":"active";
   }
 }
 export function helpTarget(n:Npc,w:World):Npc|undefined {

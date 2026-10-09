@@ -1,5 +1,6 @@
+import {WALK_SPEED} from "./action-time";
 import { validScenePath, type SceneId } from "./scene-data";
-import { MAP, type Npc, type Point } from "./world";
+import { type Npc, type Point } from "./world";
 
 export const ART_PIXEL = 2;
 export const RESIDENT_HEIGHT = 64;
@@ -37,13 +38,12 @@ export function acceptPosition(m:Motion,npc:Pick<Npc,"position"|"lastPath"> & {s
   if(sceneId!==m.sceneId)return stillAt(npc.position,npc.facing??"south",sceneId);
   if(same(m.target,npc.position))return npc.facing?{...m,idleFacing:npc.facing}:m; // polling, selection, feeding and run toggles do not replay a path
   const p=npc.lastPath;
-  const expected=[m.target,{x:m.target.x,y:MAP.roadY},{x:npc.position.x,y:MAP.roadY},npc.position];
-  if(sceneId==="town"&&!npc.homeId ? p.length!==4||p.some((point,i)=>!same(point,expected[i])||!Number.isFinite(point.x)||!Number.isFinite(point.y)||point.x<0||point.x>MAP.width||point.y<0||point.y>MAP.height) : !validScenePath(sceneId,p)||!same(p[0],m.target)||!same(p.at(-1)!,npc.position))return stillAt(npc.position,"south",sceneId);
+  if(!validScenePath(sceneId,p)||!same(p[0],m.target)||!same(p.at(-1)!,npc.position))return stillAt(npc.position,npc.facing??"south",sceneId);
   const current=sample(m,now);
   // Rapid manual commits keep the unplayed old route, then the newly committed route.
   // There is no extrapolation, independent simulation or unbounded offline queue.
   const points=(current.moving?[current.position,...m.points.slice(current.segment+1),...p.slice(1)]:p).filter((point,i,all)=>i===0||!same(point,all[i-1]));
   if(points.length>64)return stillAt(npc.position,current.facing,sceneId);
   const length=points.slice(1).reduce((sum,point,i)=>sum+distance(points[i],point),0);
-  return {sceneId,target:{...npc.position},points:points.map(point=>({...point})),startedAt:now,duration:Math.min(3000,Math.max(400,length/0.15)),facing:current.facing};
+  return {sceneId,target:{...npc.position},points:points.map(point=>({...point})),startedAt:now,duration:length/WALK_SPEED*1000,facing:current.facing};
 }

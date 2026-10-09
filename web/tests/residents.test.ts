@@ -15,9 +15,9 @@ describe("six residents without overwriting old citizens",()=>{
     expect(decide(w.npcs[4],w).action).toEqual({kind:"move",to:"reed"});
     expect(decide({...w.npcs[2],energy:8},w).action).toEqual({kind:"move",to:"rose"});
   });
-  it("all six sustain legal scene paths and restore for 320 steps",()=>{
+  it("all six sustain legal scene paths and restore for 1200 seconds",()=>{
     let w=populateResidents(createWorld());const visits=new Map<string,Set<string>>();
-    for(let i=0;i<320;i++){w=advanceWorld(w);assertWorld(w);expect(restoreWorld(JSON.parse(JSON.stringify(w)))).toEqual(w);
+    for(let i=0;i<1200;i++){w=advanceWorld(w);assertWorld(w);expect(restoreWorld(JSON.parse(JSON.stringify(w)))).toEqual(w);
       for(const n of w.npcs){expect(canStand(n.sceneId,n.position),n.id+" "+n.action).toBe(true);if(n.lastPath.length)expect(validScenePath(n.sceneId,n.lastPath),n.id).toBe(true);
         if(!visits.has(n.id))visits.set(n.id,new Set());visits.get(n.id)!.add(n.sceneId);}
       expect(new Set(w.events.map(e=>e.id)).size).toBe(w.events.length);

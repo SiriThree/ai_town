@@ -1,9 +1,9 @@
 import { describe,it,expect } from "vitest";
 import { acceptPosition,poseAt,stillAt } from "../src/lib/scene-motion";
-import { createWorld,advanceWorld,execute } from "../src/lib/world";
+import { createWorld,execute } from "../src/lib/world";
 
 describe("committed route presentation",()=>{
-  const world=createWorld(),start=world.npcs[0],next=advanceWorld(world).npcs[0];
+  const world=createWorld(),start=world.npcs[0],next=execute(start,{action:{kind:"move",to:"cafe"},reason:"saved route"},world);
   it("opens at the saved endpoint without replaying an old lastPath",()=>{
     const m=stillAt(next.position);expect(acceptPosition(m,next,0)).toBe(m);expect(poseAt(m,0)).toMatchObject({position:next.position,moving:false,frame:0});
   });
@@ -21,13 +21,13 @@ describe("committed route presentation",()=>{
     const returnNpc=execute(next,{action:{kind:"move",to:"home"},reason:"test"},world);
     const joined=acceptPosition(m,returnNpc,500);
     expect(poseAt(joined,500).position).toEqual(poseAt(m,500).position);
-    expect(joined.points).toContainEqual(next.position);expect(joined.duration).toBeLessThanOrEqual(3000);
-    expect(poseAt(joined,4000)).toMatchObject({position:returnNpc.position,moving:false});
+    expect(joined.points).toContainEqual(next.position);expect(joined.duration).toBeGreaterThan(3000);
+    expect(poseAt(joined,500+joined.duration)).toMatchObject({position:returnNpc.position,moving:false});
   });
   it("snaps to the latest saved endpoint if a path is missing, stale or illegal",()=>{
     for(const path of [[],[{x:1,y:1}],next.lastPath.map(p=>({...p,x:p.x+3}))])expect(poseAt(acceptPosition(stillAt(start.position),{...next,lastPath:path},0),0)).toMatchObject({position:next.position,moving:false});
   });
-  it("finishes a committed walk during pause and after tab suspension, with no replay",()=>{
+  it("samples a committed segment after tab suspension with no replay",()=>{
     const m=acceptPosition(stillAt(start.position),next,0);expect(poseAt(m,100).moving).toBe(true);expect(poseAt(m,60000)).toMatchObject({position:next.position,moving:false,frame:0});
   });
   it("supports west and south direction from saved returning paths",()=>{

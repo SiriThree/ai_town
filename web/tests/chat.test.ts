@@ -18,9 +18,9 @@ describe("NPC 对话与降级",()=>{
   it("同一居民推进后的地点、行动和需求进入回答",()=>{
     const next=advanceWorld(world);
     expect(fallbackReply(npc,world,"现在在哪")).toContain("树荫广场");
-    expect(fallbackReply(next.npcs[0],next,"现在在哪")).toContain("麦香咖啡馆");
+    expect(fallbackReply(next.npcs[0],next,"现在在哪")).toContain("树荫广场");
     expect(fallbackReply(next.npcs[0],next,"现在在哪")).toContain(next.npcs[0].action);
-    expect(fallbackReply(next.npcs[0],next,"你饿吗")).toContain("67/100");
+    expect(fallbackReply(next.npcs[0],next,"你饿吗")).toContain("59/100");
   });
   it("修改世界的要求不会得到伪造成功回复",()=>{
     const before=structuredClone(world);

@@ -100,10 +100,10 @@ export default function Town() {
     } finally { lock.current = false; setPending(false); }
   }
   function advance() {
-    if(world) void update("/api/world/tick",{expectedRevision:world.revision},()=>"推进已保存 · +10 分钟");
+    if(world) void update("/api/world/tick",{expectedRevision:world.revision},()=>"推进已保存 · +2 分钟 / 1 秒行动进度");
   }
   function toggleRun() {
-    if(world){const running=!runState(world).running;void update("/api/world/run",{running,expectedRevision:world.revision},()=>running?"自动运行已开启 · 每 5 秒一步":"已暂停 · 不再自动推进");}
+    if(world){const running=!runState(world).running;void update("/api/world/run",{running,expectedRevision:world.revision},()=>running?"自动运行已开启 · 每秒结算行动进度":"已暂停 · 不再自动推进");}
   }
   function feed() {
     const target=world?.npcs.find(n=>n.id===selected);
@@ -127,7 +127,7 @@ export default function Town() {
   return <main>
     <header className="town-header">
       <div className="brand"><span className="brand-mark" aria-hidden>✦</span><div><h1>晨露村</h1><p>小镇手记 <span> / </span> 第一章</p></div></div>
-      <div className="clock"><span className="sun" aria-hidden>☀</span><div><strong data-testid="world-time">{world ? worldTime(world.minute) : "等待存档"}</strong><small data-testid="run-status">{world && runState(world).running ? "自动运行 · 每 5 秒一步" : "已暂停 · 可手动推进"}</small></div></div>
+      <div className="clock"><span className="sun" aria-hidden>☀</span><div><strong data-testid="world-time">{world ? worldTime(world.minute) : "等待存档"}</strong><small data-testid="run-status">{world && runState(world).running ? "自动运行 · 每秒结算行动进度" : "已暂停 · 可手动推进"}</small></div></div>
       <button className="run-toggle" aria-pressed={!!world && runState(world).running} disabled={pending || syncing || !world} onClick={toggleRun}>{world && runState(world).running ? "暂停自动运行" : "开始自动运行"}</button>
       <button className="advance" disabled={pending || syncing || !world} onClick={advance}>{pending ? "处理中…" : "推进一步"}<span aria-hidden> ▷</span></button>
     </header>

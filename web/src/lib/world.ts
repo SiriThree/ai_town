@@ -1,3 +1,4 @@
+import {STEP_MS,STEP_MINUTES,WALK_SPEED,pathLength,pathPoint,pathSection,actionDuration,type OngoingAction} from "./action-time";
 import {prepareWork,settleWork,assertWork,workPoint,helperPoint,helpTarget,taskName,type WorkTask,type WorkResult} from "./work";
 import {buildingAt,buildingIn,portalById,nearPortal,HOME_REST,homePath,validScenePath,npcCafeSpawn,canStand,portalSpawn,type SceneId} from "./scene-data";
 import {TOWN_BUILDINGS} from "./town-map";
@@ -10,7 +11,7 @@ export type Point = { x: number; y: number };
 export type Action = {kind:"work"}|{kind:"help"|"approach-work";target:string}|{ kind:"walk-inside"; to:"activity"|"exit" } | { kind: "move"; to: LocationId } | { kind: "eat" | "rest" | "socialize" | "read" | "wait" | "enter" | "exit" };
 export type Decision = { action: Action; reason: string };
 export type Npc = {
-  id: string; workTask?:WorkTask; lastHelpTaskId?:string; lastHelpMinute?:number; homeId?:LocationId; job?:"cafe"|"store"; preference?:"service"|"home"|"social"|"study"; bio?:string; appearance?:string; name: string; personality: "outgoing" | "quiet";
+  id: string; ongoing?:OngoingAction; workTask?:WorkTask; lastHelpTaskId?:string; lastHelpMinute?:number; homeId?:LocationId; job?:"cafe"|"store"; preference?:"service"|"home"|"social"|"study"; bio?:string; appearance?:string; name: string; personality: "outgoing" | "quiet";
   hunger: number; energy: number; mood: number; location: LocationId;
   sceneId: SceneId; facing?: "north"|"south"|"east"|"west"; position: Point; action: string; reason: string; lastPath: Point[];
 };
@@ -22,7 +23,7 @@ export type World = {
   npcs: Npc[]; events: TownEvent[];
 };
 export const MAP = { width: 960, height: 600, roadY: 358 };
-export const AUTO_INTERVAL_MS = 5000;
+export const AUTO_INTERVAL_MS = STEP_MS;
 export const FOOD_AMOUNT = 35;
 // Older persisted worlds have no run field and stay paused until explicitly started.
 export const runState = (world: World) => world.run ?? { running: false, nextTickAt: null };
@@ -146,6 +147,7 @@ export function execute(npc: Npc, decision: Decision, world: World): Npc {
   const { action, reason } = decision;
   if (!canExecute(npc, action, world)) throw new Error("非法动作：地点或参与条件不满足");
   const next = structuredClone(npc);
+  delete next.ongoing;
   next.reason = reason;
   next.lastPath = [];
   delete next.facing;
@@ -187,22 +189,53 @@ export function execute(npc: Npc, decision: Decision, world: World): Npc {
   next.hunger = clamp(next.hunger); next.energy = clamp(next.energy); next.mood = clamp(next.mood);
   return next;
 }
+// Start does not apply the preview's effects. Only settlement may change needs/location.
+function beginAction(n:Npc,w:World):Npc {
+  const decision=decide(n,w),preview=execute(n,decision,w),path=preview.lastPath;
+  const ongoing:OngoingAction={id:`action:${w.revision}:${n.id}`,decision,sceneId:n.sceneId,startedMinute:w.minute,
+    elapsedMs:0,durationMs:actionDuration(decision.action.kind,path),path:structuredClone(path)};
+  const label=path.length>1?`正在行走 · ${preview.action.replace(/^来到|^走到|^走向/,"")}`:
+    decision.action.kind==="work"?`正在${taskName(n.job!)}（尚未完成）`:
+    decision.action.kind==="help"?"正在协助核对":`${preview.action} · 进行中`;
+  return {...n,ongoing,lastPath:[],action:label,reason:decision.reason};
+}
+function progressAction(n:Npc,w:World):{npc:Npc;completed:boolean} {
+  const pending=n.ongoing!;
+  // Committed routes finish at a safe point. Urgent needs interrupt stationary work,
+  // retaining WorkTask progress; ordinary checks cannot replace an ongoing action.
+  if(!pending.path.length && ["work","help","read","socialize","wait"].includes(pending.decision.action.kind) && (n.hunger>=90||n.energy<=10)){
+    const next={...n,action:"中断活动，先处理紧急需求",lastPath:[]};delete next.ongoing;return {npc:next,completed:true};
+  }
+  const elapsed=Math.min(pending.durationMs,pending.elapsedMs+STEP_MS);
+  const next={...n,ongoing:{...pending,elapsedMs:elapsed},lastPath:[] as Point[]};
+  if(pending.path.length>1){
+    next.lastPath=pathSection(pending.path,pending.elapsedMs*WALK_SPEED/1000,elapsed*WALK_SPEED/1000);
+    next.position=pathPoint(pending.path,elapsed*WALK_SPEED/1000);
+  }
+  if(elapsed<pending.durationMs)return {npc:next,completed:false};
+  const input={...next,position:pending.path[0]??next.position};delete (input as Npc).ongoing;
+  if(!canExecute(input,pending.decision.action,w)){
+    const stopped:Npc={...next,action:"条件已变化，保留当前位置重新考虑",lastPath:[]};delete stopped.ongoing;return {npc:stopped,completed:true};
+  }
+  const settled=execute(input,pending.decision,w);
+  settled.lastPath=next.lastPath;
+  return {npc:settled,completed:true};
+}
 export function advanceWorld(world: World): World {
   const next = structuredClone(world);
-  next.minute += 10; next.revision += 1;
-  next.npcs = next.npcs.map(n => ({ ...n, hunger: clamp(n.hunger + (n.homeId?3:8)), energy: clamp(n.energy - (n.homeId?2:6)), mood: clamp(n.mood - 2) }));
+  next.minute += STEP_MINUTES; next.revision += 1;
+  // Slower metabolism allows actual cross-town travel. No needs change per render frame.
+  if(Math.floor(next.minute/30)!==Math.floor(world.minute/30))
+    next.npcs=next.npcs.map(n=>({...n,hunger:clamp(n.hunger+2),energy:clamp(n.energy-1),mood:clamp(n.mood-1)}));
   prepareWork(next);
-  // Stable turn order: each later resident sees earlier residents' committed-in-turn moves.
-  for (let i = 0; i < next.npcs.length; i++) {
-    const n = execute(next.npcs[i], decide(next.npcs[i], next), next);
-    next.npcs[i] = n;
-    next.events.push({ id: next.revision * 1000 + i, minute: next.minute, npcId: n.id, text: `${n.name} · ${n.action}`, reason: n.reason });
+  for (let i=0;i<next.npcs.length;i++) {
+    let n=next.npcs[i];
+    if(!n.ongoing)n=beginAction(n,next);
+    const result=progressAction(n,next);next.npcs[i]=result.npc;
+    if(result.completed)next.events.push({id:next.revision*1000+i,minute:next.minute,npcId:n.id,text:`${n.name} · ${result.npc.action}`,reason:n.reason});
   }
-  settleWork(next);
-  beginSocial(next);
-  observeEncounters(next);
-  next.events = next.events.slice(-100);
-  return next;
+  settleWork(next);beginSocial(next);observeEncounters(next);
+  next.events=next.events.slice(-100);return next;
 }
 export function giveFood(world: World, npcId: string): World {
   const npc = world.npcs.find(n => n.id === npcId);
@@ -227,6 +260,7 @@ export function advanceOnClock(world: World, now: number, automatic: boolean): W
 }
 const samePoint=(a:Point|undefined,b:Point)=>a?.x===b.x&&a?.y===b.y;
 function validNpcPosition(n:Npc):boolean {
+  if(n.ongoing?.path.length)return canStand(n.sceneId,n.position)&&n.sceneId===n.ongoing.sceneId&&(n.sceneId==="town"||buildingIn(n.sceneId)?.location===n.location);
   if(n.homeId)return !!buildingAt(n.homeId)&&canStand(n.sceneId,n.position)&&(n.sceneId==="town"||buildingIn(n.sceneId)?.location===n.location);
   if(n.sceneId==="cafe_interior")return n.location==="cafe"&&samePoint(n.position,npcCafeSpawn(n.id));
   if(n.sceneId==="home_interior")return n.location==="home"&&(samePoint(n.position,portalById("home-door").npcSpawns[n.id])||samePoint(n.position,HOME_REST[n.id].position));
@@ -246,6 +280,7 @@ export function restoreWorld(value:unknown):World {
 }
 export function npcPlace(npc:Npc,world:World):string {
   const name=world.locations.find(l=>l.id===npc.location)!.name;
+  if(npc.ongoing?.path.length)return `${npc.sceneId==="town"?"室外道路":buildingIn(npc.sceneId)?.name+"室内"} · 途中（尚未到达）`;
   return buildingAt(npc.location)?`${name} · ${npc.sceneId!=="town"?"室内":"室外门口"}`:name;
 }
 export function assertWorld(value: unknown): asserts value is World {
@@ -255,9 +290,15 @@ export function assertWorld(value: unknown): asserts value is World {
   if (w.run !== undefined && (!w.run || typeof w.run.running !== "boolean" || (w.run.running ? !Number.isSafeInteger(w.run.nextTickAt) || w.run.nextTickAt! < 0 : w.run.nextTickAt !== null))) throw new Error("运行状态存档无效");
   assertExperiences(w);assertSocial(w);assertWork(w);
   for (const n of w.npcs) {
-    if ((!/^[a-z][a-z0-9_-]{0,39}$/.test(n.id)||(!n.homeId&&!["aqing","aning"].includes(n.id))) || !["quiet", "outgoing"].includes(n.personality) || !w.locations.some(l => l.id === n.location) || [n.hunger, n.energy, n.mood].some(v => !Number.isFinite(v) || v < 0 || v > 100) || !validNpcPosition(n) || !Array.isArray(n.lastPath) || (!n.homeId&&n.sceneId==="cafe_interior"&&n.lastPath.length!==0) || (n.facing!==undefined&&!["north","south","east","west"].includes(n.facing)) || (n.sceneId==="home_interior"&&n.lastPath.length!==0&&(!validScenePath(n.sceneId,n.lastPath)||!samePoint(n.lastPath.at(-1),n.position))) || (n.homeId&&n.lastPath.length>0&&(!validScenePath(n.sceneId,n.lastPath)||!samePoint(n.lastPath.at(-1),n.position))) || n.lastPath.some(p=>!Number.isFinite(p.x)||!Number.isFinite(p.y))) throw new Error("居民存档无效");
+    if(n.ongoing){
+      const a=n.ongoing;
+      if(typeof a.id!=="string"||a.sceneId!==n.sceneId||!Number.isFinite(a.durationMs)||a.durationMs<=0||!Number.isFinite(a.elapsedMs)||a.elapsedMs<0||a.elapsedMs>=a.durationMs||!Number.isSafeInteger(a.startedMinute)||a.startedMinute>w.minute||!Array.isArray(a.path)||
+        (a.path.length>0&&(!validScenePath(n.sceneId,a.path)||Math.hypot(n.position.x-pathPoint(a.path,a.elapsedMs*WALK_SPEED/1000).x,n.position.y-pathPoint(a.path,a.elapsedMs*WALK_SPEED/1000).y)>.01||Math.abs(a.durationMs-Math.max(STEP_MS,pathLength(a.path)/WALK_SPEED*1000))>.01)))throw new Error("持续行动存档无效");
+    }
+    if ((!/^[a-z][a-z0-9_-]{0,39}$/.test(n.id)||(!n.homeId&&!["aqing","aning"].includes(n.id))) || !["quiet", "outgoing"].includes(n.personality) || !w.locations.some(l => l.id === n.location) || [n.hunger, n.energy, n.mood].some(v => !Number.isFinite(v) || v < 0 || v > 100) || !validNpcPosition(n) || !Array.isArray(n.lastPath) || (!n.ongoing&&!n.homeId&&n.sceneId==="cafe_interior"&&n.lastPath.length!==0) || (n.facing!==undefined&&!["north","south","east","west"].includes(n.facing)) || (n.sceneId==="home_interior"&&n.lastPath.length!==0&&(!validScenePath(n.sceneId,n.lastPath)||!samePoint(n.lastPath.at(-1),n.position))) || (n.homeId&&n.lastPath.length>0&&(!validScenePath(n.sceneId,n.lastPath)||!samePoint(n.lastPath.at(-1),n.position))) || n.lastPath.some(p=>!Number.isFinite(p.x)||!Number.isFinite(p.y))) throw new Error("居民存档无效");
   }
 }
 export function worldTime(minute: number): string {
   return `第 ${Math.floor(minute / 1440) + 1} 天 · ${String(Math.floor(minute / 60) % 24).padStart(2, "0")}:${String(minute % 60).padStart(2, "0")}`;
 }
+

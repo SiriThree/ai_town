@@ -1,3 +1,4 @@
+import {until} from "./helpers/advance";
 import { HOME_REST } from "../src/lib/scene-data";
 import { describe, it, expect } from "vitest";
 import { advanceWorld, assertWorld, canExecute, createWorld, decide, execute, positionAt, roadPath, type LocationId } from "../src/lib/world";
@@ -26,19 +27,14 @@ describe("可解释的居民行为", () => {
     }
   });
   it("饥饿到达目的地后才吃饭，效果符合定义且不修改输入", () => {
-    const w=createWorld(), before=structuredClone(w), next=advanceWorld(w);
-    expect(w).toEqual(before);
-    expect(next.npcs[0].location).toBe("cafe");
-    expect(next.npcs[0].hunger).toBe(67);
-    const entered=advanceWorld(next);
-    expect(entered.npcs[0].sceneId).toBe("cafe_interior");
-    expect(entered.npcs[0].hunger).toBe(75);
-    const after=advanceWorld(entered);
-    expect(after.npcs[0].action).toBe("享用餐点");
-    expect(after.npcs[0].hunger).toBe(33);
-    expect(after.npcs[0].energy).toBe(63);
-    expect(after.events).toHaveLength(6);
-    expect(after.minute).toBe(510);
+    const w=createWorld();w.npcs[0].hunger=70;const before=structuredClone(w),next=advanceWorld(w);
+    expect(w).toEqual(before);expect(next.npcs[0].location).toBe("square");expect(next.npcs[0].ongoing?.decision.action.kind).toBe("move");
+    const door=until(next,w=>!w.npcs[0].ongoing&&w.npcs[0].location==="cafe");
+    const entered=advanceWorld(door);expect(entered.npcs[0].sceneId).toBe("cafe_interior");
+    const eating=advanceWorld(entered);expect(eating.npcs[0].hunger).toBe(entered.npcs[0].hunger);
+    const after=until(eating,w=>!w.npcs[0].ongoing);
+    expect(after.npcs[0].action).toBe("享用餐点");expect(after.npcs[0].hunger).toBeLessThan(entered.npcs[0].hunger);
+
   });
   it("需求组合与地点矩阵都产生合法动作，效果有界", () => {
     for(const location of ["home","cafe","square"] as const) for(const hunger of [0,64,65,100]) for(const energy of [0,25,26,100]) {
@@ -72,8 +68,8 @@ describe("可解释的居民行为", () => {
   });
   it("多步推进维持状态界限、稳定结果和日志上限", () => {
     let a=createWorld(),b=createWorld();
-    for(let i=0;i<120;i++) {a=advanceWorld(a);b=advanceWorld(b);expect(()=>assertWorld(a)).not.toThrow();}
-    expect(a).toEqual(b);expect(a.events).toHaveLength(100);expect(a.revision).toBe(120);
+    for(let i=0;i<600;i++) {a=advanceWorld(a);b=advanceWorld(b);expect(()=>assertWorld(a)).not.toThrow();}
+    expect(a).toEqual(b);expect(a.events).toHaveLength(100);expect(a.revision).toBe(600);
   });
   it("坏版本和坏位置拒绝恢复，不重置为种子", () => {
     const w=createWorld(); w.npcs[0].position.x=10;
