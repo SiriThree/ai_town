@@ -51,3 +51,8 @@ main .scene-frame.interior:has(.interaction-dock:not([hidden]) .scene-composer) 
 
 /* Expanded roster remains a compact horizontal strip rather than shrinking the map. */
 .residents>div{display:flex;overflow-x:auto;gap:8px;max-width:100%}.residents>div>button{flex:0 0 150px}.portrait:not(.aqing):not(.aning)::after{display:none}.portrait:not(.aqing):not(.aning){font-size:25px;background:#ded0ac}
+
+/* V10.1: streets and residents take precedence over repeated location metadata. */
+.play-mode .place-label small{display:none}
+.play-mode .place-label{background:#f6eccfd9;box-shadow:none;padding:3px 7px;font-size:11px}
+.overview-mode .npc-target>span,.overview-mode .player-marker small{opacity:.65}

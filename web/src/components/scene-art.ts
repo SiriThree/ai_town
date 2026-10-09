@@ -1,3 +1,5 @@
+import {SLICE_TREES,SLICE_FLOWERS,COURTYARD_FENCES} from "../lib/town-dressing";
+import {addStreetDetails} from "./street-details";
 import {TOWN_BUILDINGS,TOWN_FENCES,TOWN_FLOWERS,TOWN_TREES,TOWN_BENCHES,TOWN_LAMPS,BRIDGES} from "../lib/town-map";
 import newFrames from "./new-resident-frames.json";
 import districtFrames from "./district-frames.json";
@@ -36,17 +38,28 @@ export function drawTown(art:Art):{ground:Container;objects:Container} {
     const y=foot-7,w=200;poly(g,[x-w/2,y-24,x+w/2,y-24,x+w/2+18,y+12,x-w/2+14,y+12],0x758459);
   }
   for(const b of BRIDGES){fence(g,b.x,b.y-17,b.w);fence(g,b.x,b.y+b.h-4,b.w);}
+  const bridge=BRIDGES[0];
+  for(const x of [bridge.x-10,bridge.x+bridge.w-12])for(const y of [bridge.y-19,bridge.y+bridge.h+4]){
+    rect(g,x+3,y+2,25,6,0x526b50);
+    for(let row=0;row<3;row++)for(let col=0;col<2;col++){const px=x+col*12+(row%2)*2,py=y-14+row*5;rect(g,px,py,11,5,0x807963);rect(g,px,py,11,1,0xc7bc95);}
+  }
   for(const [x,y,w]of TOWN_FENCES)fence(g,x,y,w);
-  for(const [x,y,w]of TOWN_FLOWERS)objects.addChild(sprite(art.bed,x+w/2,y+15,w*314/656));
+  for(const f of COURTYARD_FENCES){
+    if(!f.vertical){fence(g,f.x,f.y-25,f.length);continue;}
+    rect(g,f.x,f.y-18,4,f.length+18,0x705334);rect(g,f.x,f.y-18,2,f.length+18,0xaf8b50);
+    for(let d=0;d<=f.length;d+=18){rect(g,f.x-2,f.y+d-25,6,25,0x745532);rect(g,f.x-2,f.y+d-25,3,23,0xc6a775);rect(g,f.x-3,f.y+d-27,8,3,0xd8b983);}
+  }
+  for(const [x,y,w]of [...TOWN_FLOWERS,...SLICE_FLOWERS])objects.addChild(sprite(art.bed,x+w/2,y+15,w*314/656));
   for(let i=0;i<7;i++){rect(g,379+i*31,284+i%2*2,20,7,0xc7bc98);rect(g,380+i*31,284+i%2*2,17,2,0xe0d1a6);}
   const fountain=sprite(art.fountain,479,462,67);objects.addChild(fountain);
   for(const [x,y]of TOWN_BENCHES)objects.addChild(sprite(art.bench,x,y,38));
   for(const [x,y]of TOWN_LAMPS)objects.addChild(sprite(art.lamp,x,y,63));
   for(const b of TOWN_BUILDINGS){const house=sprite(art[b.texture],b.x,b.y,b.height);house.zIndex=b.y-8;objects.addChild(house);}
-  for(const [x,y,h,pink]of TOWN_TREES){
+  for(const [x,y,h,pink]of [...TOWN_TREES,...SLICE_TREES]){
     const shadow=new Graphics();shadow.ellipse(x+6,y+3,h*.23,h*.075).fill({color:0x405c3b,alpha:.17});ground.addChild(shadow);objects.addChild(sprite(pink?art.blossom:art.oak,x,y,h));
   }
   const table=new Graphics();table.zIndex=292;rect(table,857,280,4,15,0x79613f);table.ellipse(859,277,14,6).fill(0x8b6744);table.ellipse(859,275,14,5).fill(0xd4b47b);rect(table,852,269,5,5,0xf6e7c7);rect(table,858,270,2,3,0xf6e7c7);objects.addChild(table);
+  addStreetDetails(objects);
   return {ground,objects};
 }
 export type ResidentArt={node:Container;update:(pose:Pose,selected:boolean)=>boolean};

@@ -132,7 +132,7 @@ export default function TownScene({ world, selected, onSelect, speech, onExpand,
     start().catch(() => { if(!cancelled) setError("场景渲染未能启动。请使用支持 WebGL 的浏览器；下方居民入口仍可查看真实存档。"); });
     return () => { cancelled = true; cancelAnimationFrame(animationFrame);renderer.current = null; if (ready && localApp) localApp.destroy(true, { children: true, context: true }); };
   }, []);
-  return <div ref={viewport} className={`scene ${sceneId}`} tabIndex={0} data-scene={sceneId} data-testid="scene-viewport" aria-label="小镇场景"
+  return <div ref={viewport} className={`scene ${sceneId} ${transform.scale<.75?"overview-mode":"play-mode"}`} tabIndex={0} data-scene={sceneId} data-testid="scene-viewport" aria-label="小镇场景"
     onPointerDown={e=>{if(e.button!==0 || (e.target as HTMLElement).closest("button,aside"))return;e.preventDefault();e.currentTarget.focus({preventScroll:true});drag.current={id:e.pointerId,x:e.clientX,y:e.clientY,camera};e.currentTarget.setPointerCapture(e.pointerId);}}
     onPointerMove={e=>{const d=drag.current;if(d && d.id===e.pointerId)setCamera(boundedCamera({...d.camera,x:d.camera.x+e.clientX-d.x,y:d.camera.y+e.clientY-d.y},size,sceneId));}}
     onPointerUp={()=>{drag.current=null;}} onPointerCancel={()=>{drag.current=null;}}>
@@ -145,7 +145,7 @@ export default function TownScene({ world, selected, onSelect, speech, onExpand,
       {SCENES[sceneId].portals.map(p=><span key={p.id} className={`door-marker ${portal?.id===p.id?"near":""}`} style={{left:p.position.x,top:p.position.y}} aria-hidden>◇</span>)}
     </div>
     {error && <p role="alert" className="scene-error">{error}</p>}
-    <div className="map-caption"><span>{SCENES[sceneId].name}</span><small>{sceneId==="town"?"沿街散步，去喝杯咖啡。":INTERIORS[sceneId].caption}</small></div>
+    <div className="map-caption"><span>{SCENES[sceneId].name}</span><small>{sceneId==="town"?(transform.scale<.75?"全景用于看布局 · 复位回到游玩镜头":"游玩视角 · 沿街散步，走进居民的生活。"):INTERIORS[sceneId].caption}</small></div>
     <div className="camera-tools" aria-label="地图镜头"><button aria-label="缩小地图" disabled={camera.zoom<=.25/baseScale} onClick={()=>zoom(-.25)}>−</button><output aria-label="地图缩放">{Math.round(transform.scale/baseScale*100)}%</output><button aria-label="放大地图" disabled={camera.zoom>=2.5} onClick={()=>zoom(.25)}>＋</button><button onClick={()=>setCamera(overviewCamera(size,sceneId))}>全景</button><button onClick={()=>setCamera(sceneId==="town"?followPlayer(player.position,size,{zoom:1,x:0,y:0},sceneId):{zoom:1,x:0,y:0})}>复位</button></div>
     {bubble && speaker && speech && <aside className="speech-bubble" data-testid="speech-bubble" data-npc={speaker.id} aria-label={`${speaker.name}的发言`} style={{left:bubble.left,top:bubble.top,width:bubble.width,height:bubble.height,"--tail-x":`${bubble.tail}px`} as CSSProperties}>
       <div className="speech-content" aria-live="polite"><div className="reply-heading"><strong>{speaker.name}</strong><span data-testid="reply-source" className={`source-badge ${speech.source}`}>{speech.source==="ai"?(speech.testMode?"AI · 本地测试替身":"AI 回复"):`降级回复 · ${FALLBACK_LABELS[speech.reason!] || "本地规则"}`}</span></div><p data-testid="chat-reply">{speech.reply}</p><small>{worldTime(speech.minute)} · {speech.worldRevision===world.revision?"本次状态":"历史发言 · 世界已更新"}</small><button onClick={onExpand}>展开全文与历史 ↗</button></div>
