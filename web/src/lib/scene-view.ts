@@ -28,7 +28,7 @@ export function boundedCamera(camera: Camera, view: Viewport,sceneId:SceneId="to
 }
 export function overviewCamera(view:Viewport,sceneId:SceneId):Camera {
   const size=SCENES[sceneId].size,base=sceneTransform(view,{zoom:1,x:0,y:0},sceneId).scale;
-  const scale=Math.max(.25,Math.floor(Math.min(view.width/size.width,view.height/size.height)*4)/4);
+  const scale=Math.max(.25,Math.floor(Math.min(view.width/size.width,view.height/size.height)*8)/8);
   return {zoom:scale/base,x:(MAP.width-size.width)*scale/2,y:((sceneId==="town"?270:310)-size.height/2)*scale};
 }
 export function followPlayer(point:Point,view:Viewport,camera:Camera,sceneId:SceneId):Camera {

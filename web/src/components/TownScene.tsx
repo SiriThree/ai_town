@@ -67,7 +67,7 @@ export default function TownScene({ world, selected, onSelect, speech, onExpand,
       await localApp.init({ width: MAP.width/ART_PIXEL, height: MAP.height/ART_PIXEL, background: 0x8ba35e, antialias: false, resolution: 1, autoStart: false, preference: "webgl" });
       localApp.stage.scale.set(1/ART_PIXEL);
       ready = true;
-      if (cancelled) { localApp.destroy(true, { children: true }); return; }
+      if (cancelled) { localApp.destroy(true, { children: true, context: true }); return; }
       host.current!.appendChild(localApp.canvas);
       localApp.canvas.setAttribute("aria-label", "晨露村地图：住宅、咖啡馆、广场与两名居民");
       const actors=new Map<string,ResidentArt>();
@@ -75,9 +75,10 @@ export default function TownScene({ world, selected, onSelect, speech, onExpand,
       let activeScene:SceneId|undefined;
       let sceneObjects:Container;
       let hero=drawPlayer(playerArt);
-      // Only one scene tree is attached. Shared cached textures survive container disposal.
+      // Release owned GraphicsContext explicitly; children:true alone retains it in Pixi 8.
+      // Shared atlas textures survive scene disposal.
       const mountScene=()=>{
-        for(const child of localApp!.stage.removeChildren())child.destroy({children:true});
+        for(const child of localApp!.stage.removeChildren())child.destroy({children:true,context:true});
         actors.clear();motions.clear();activeScene=latest.current.sceneId;
         const bounds=SCENES[activeScene].size;localApp!.renderer.resize(bounds.width/ART_PIXEL,bounds.height/ART_PIXEL);
         const {ground,objects}=activeScene==="town"?drawTown(art):drawInterior(playerArt,activeScene);
@@ -94,7 +95,7 @@ export default function TownScene({ world, selected, onSelect, speech, onExpand,
         setPoses(Object.fromEntries([...motions].map(([id,m])=>[id,poseAt(m,performance.now())])));
         localApp!.render();
       };
-      hero.node.destroy({children:true});mountScene();
+      hero.node.destroy({children:true,context:true});mountScene();
       let paints=1;
       const paint=(now:number)=>{
         animationFrame=0;if(cancelled)return;
@@ -111,7 +112,7 @@ export default function TownScene({ world, selected, onSelect, speech, onExpand,
         let membershipChanged=false;
         for(const [id,actor] of actors){
           if(!nextWorld.npcs.some(n=>n.id===id&&residentScene(n)===activeScene)){
-            sceneObjects.removeChild(actor.node);actor.node.destroy({children:true});actors.delete(id);motions.delete(id);membershipChanged=true;
+            sceneObjects.removeChild(actor.node);actor.node.destroy({children:true,context:true});actors.delete(id);motions.delete(id);membershipChanged=true;
           }
         }
         for(const n of nextWorld.npcs.filter(n=>residentScene(n)===activeScene&&!actors.has(n.id))){
@@ -128,7 +129,7 @@ export default function TownScene({ world, selected, onSelect, speech, onExpand,
       host.current!.dataset.paints = "1";setRenderReady(true);
     }
     start().catch(() => { if(!cancelled) setError("场景渲染未能启动。请使用支持 WebGL 的浏览器；下方居民入口仍可查看真实存档。"); });
-    return () => { cancelled = true; cancelAnimationFrame(animationFrame);renderer.current = null; if (ready && localApp) localApp.destroy(true, { children: true }); };
+    return () => { cancelled = true; cancelAnimationFrame(animationFrame);renderer.current = null; if (ready && localApp) localApp.destroy(true, { children: true, context: true }); };
   }, []);
   return <div ref={viewport} className={`scene ${sceneId}`} tabIndex={0} data-scene={sceneId} data-testid="scene-viewport" aria-label="小镇场景"
     onPointerDown={e=>{if(e.button!==0 || (e.target as HTMLElement).closest("button,aside"))return;e.preventDefault();e.currentTarget.focus({preventScroll:true});drag.current={id:e.pointerId,x:e.clientX,y:e.clientY,camera};e.currentTarget.setPointerCapture(e.pointerId);}}
