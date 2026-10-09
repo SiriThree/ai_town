@@ -1,5 +1,39 @@
 # 晨露村 · Web AI 小镇 MVP
 
+## 当前版本：V9.4（本地，未发布）
+
+当前实际规模：**12 栋可进入建筑、13 个场景、6 名居民、2 类职业工作**。从老广场可步行经公共街与双桥到东岸住宅；所有门有独立室内及家具碰撞。点击居民查看真实状态、经历和当前任务，输入聊天后气泡跟随角色；底部居民名单仅在同场景可选择。自动运行仍每5秒一步，关闭网页不常驻模拟。
+
+小雨在咖啡馆备餐，老林在杂货铺理货，任务需要到场并连续执行两次工作；疲劳/饥饿会暂停并保留进度，完成才累计餐点/货架结果。小满在同场景、需求允许时可以实际协助。档案展示进度与产出，公开日志可核对结果。餐点计数是最小工作结果，尚无库存消费、买卖或金币。
+
+公开自主交流与玩家私聊分开。居民必须同场景近距离、空闲且需求允许才交流；每段两句、每人120游戏分钟冷却、全局30分钟间隔、每游戏日最多8段。`NPC_AI_ENABLED=false`（默认）使用本地真实状态对白；设为true后才请求配置的模型，仍受`AI_ENABLED`、`AI_CALLS_PER_DAY`和两个全局并发槽限制。每句最多等待2秒，失败保留可读本地回复；世界事务不等待模型。当前新自主模型链仅Mock/故障/超时实测，**本轮没有新的外部付费模型调用**。早期真实玩家聊天证据是历史验证，不代表本轮自主社交已实测供应商服务。
+
+旧存档不会在读取时被改写。已有本机两居民世界需先备份，再显式运行（只支持本项目本机55487/55488及对应库名）：
+```powershell
+node --env-file=.env.local --import tsx scripts/migrate-residents.ts --apply
+```
+它保留原居民全部属性、世界时间、日志与私聊，只追加缺少居民/地点并保存版本。重复调用幂等；备份使用独占文件写入，已有同版本备份时应先核实而非覆盖。新初始化默认为6居民；`WORLD_ROSTER=legacy`仅供原两居民回归夹具。回退到旧两居民代码必须使用匹配旧快照，不能让旧代码写新世界。
+
+本地仍在 `web/` 执行 `npm run dev`，生产预览 `npm run build` 后 `npm start`，地址 http://127.0.0.1:3100。保持现有 PostgreSQL 配置，不删库、不重种。新增内容无需DDL、依赖或Worker；部署准备保留但本轮未执行。
+
+验证与材料：[连续验收](../docs/v8-v9-validation.md)、[阶段过程](../docs/progress-v8-v9.md)、[地图蓝图](../docs/town-map-plan.md)、[技术说明增量](../docs/delivery-v5-1.md#v8v9-技术增量)。本轮原创资产说明位于 `public/art/v8-2/ASSETS.md`、`public/art/v9-1/ASSETS.md`；没有复制参考仓库素材。
+
+复测命令（均在web目录，先build，仅专用.env.test.local；evidence目录不要复用覆盖）：
+```powershell
+npm run typecheck
+npm run lint
+npm test
+npm run build
+$env:EVIDENCE_DIR='evidence/v8-v9/my-work-check'
+node --env-file=.env.test.local --import tsx scripts/v94-work-check.mjs
+# 全12建筑真实步行，使用独立3116端口
+$env:EVIDENCE_DIR='evidence/v8-v9/my-tour'
+node --env-file=.env.test.local --import tsx scripts/v9-final-tour.mjs
+```
+V8.2/3/4、V9.1/2/3 分别有 `v82-map-check`、`v83-interiors-check`、`v84-stability-check`、`v91-residents-check`、`v92-experiences-check`、`v93-social-check` 脚本（.mjs，同样使用tsx）。原数据库/聊天/私聊回归命令在下文。专门的 `v9-postgres-restore.ts --restart-test-postgres` 会真实重启已经校验的55488测试容器，固定核对本轮v94-final快照；不得与其他测试同时运行。截图/录屏及快照位于被Git忽略的 `evidence/v8-v9/`，含私人数据的数据库备份不能公开。
+
+以下各旧章节保留当时范围，当前功能数量、NPC位置和隐私规则以本节及V5.2说明为准。
+
 已实现：两名居民、三个地点、规则决策、手动推进、像素街角、档案、日志、PostgreSQL 恢复，以及第二阶段的玩家对话、可配置模型调用与本地降级。**真实外部模型已启用并完成一次浏览器端到端验证**（2026-10-09）；配置位于忽略提交的 `.env.local`，当前 `AI_ENABLED=true`。服务失败时仍按原规则降级。V3 已加入每 5 秒自动推进与送食物；尚未部署线上。需求与后续里程碑沿用 [spec](../docs/spec.md)。
 
 ## 当前游玩：V6.1 玩家与咖啡馆

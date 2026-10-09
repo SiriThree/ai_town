@@ -4,7 +4,7 @@ import type {ChatReply} from "./chat-types";
 export type PublicConversation={id:string;eventId:number;minute:number;sceneId:Npc["sceneId"];participants:string[];speakers:Npc[];turns:(ChatReply&{npcId:string})[];modelState:"local"|"claimed"|"done"};
 export function canTalk(a:Npc,b:Npc,w:World){
   if(a.id===b.id||a.sceneId!==b.sceneId||Math.hypot(a.position.x-b.position.x,a.position.y-b.position.y)>100)return false;
-  if([a,b].some(n=>n.lastPath.length||n.energy<30||n.hunger>=65||/休息|制作|理货/.test(n.action)))return false;
+  if([a,b].some(n=>n.lastPath.length||n.energy<30||n.hunger>=65||/休息|制作|理货|整理|协助/.test(n.action)))return false;
   if(![a,b].some(n=>n.personality==="outgoing"&&n.mood<85)&&(relationFor(w,a.id,b.id)?.familiarity??0)<5)return false;
   return !w.conversations?.some(c=>w.minute-c.minute<120&&c.participants.some(id=>id===a.id||id===b.id));
 }

@@ -149,6 +149,7 @@ export default function Town() {
           <p className="location">⌖ {npcPlace(npc,world)}</p><p>{npc.bio}</p>{npc.job&&<p>职业：{npc.job==="cafe"?"咖啡馆备餐员":"杂货铺理货员"}</p>}
           <dl className="needs">{([["hunger", "饥饿", "越低越饱足"], ["energy", "精力", "越高越有活力"], ["mood", "心情", "越高越愉快"]] as const).map(([key,label,hint]) => <div key={key}><dt>{label}<small>{hint}</small></dt><dd><span data-testid={`stat-${key}`}>{npc[key]}</span><span className={`meter ${key}`}><span style={{width:`${npc[key]}%`}} /></span></dd></div>)}</dl>
           <div className="decision"><small>此刻的行动</small><h3 data-testid="npc-action">{npc.action}</h3><p>{npc.reason}</p></div>
+          {npc.workTask&&<p data-testid="work-task">当前任务：{npc.workTask.kind==="cafe"?"制作餐点":"整理货架"} · {npc.workTask.progress}/2 · {npc.workTask.phase==="paused"?"先恢复需求，保留进度":npc.workTask.phase==="completed"?"已完成":"进行中"}<br/>累计真实产出：餐点 {world.workOutputs?.cafe??0} / 货架 {world.workOutputs?.store??0}</p>}
           {personalMemories(world,npc.id).slice(-2).map(m=><p key={m.eventId} className="memory-note" data-testid="npc-memory">亲历：{m.summary}<small> 来源事件 #{m.eventId}</small></p>)}
           <p className="profile-foot">{worldTime(world.minute)} · 来自已保存的世界</p>
           <button className="profile-chat" disabled={pending||!present} onClick={()=>{setPanel(null);setChatOpen(true);}}>与{npc.name}对话 <span aria-hidden>↗</span></button>

@@ -18,7 +18,7 @@ export function recordExperience(world:World,ids:string[],kind:ExperienceEvent["
     text:result,reason:"由后台根据实际在场、行动和执行结果确认；主观看法不改变世界事实。"};
   data.facts.push(e);world.events.push(e);
   for(const n of present){const memory:Memory={eventId:e.id,minute:e.minute,summary:result,people:ids.filter(id=>id!==n.id),sceneId:e.sceneId,importance:kind==="work"?3:2,
-    opinion:n.personality==="outgoing"?"我的感受：和邻居一起经历日常，让我觉得亲近。":"我的感受：我记下了这次经历，想再慢慢了解对方。"};
+    opinion:present.length===1?"我的感受：完成手边的事情让我踏实；这不代表其他居民的看法。":n.personality==="outgoing"?"我的感受：和邻居一起经历日常，让我觉得亲近。":"我的感受：我记下了这次经历，想再慢慢了解对方。"};
     data.memories[n.id]=[...(data.memories[n.id]??[]),memory].slice(-20);}
   for(let i=0;i<ids.length;i++)for(let j=i+1;j<ids.length;j++){
     const [a,b]=[ids[i],ids[j]].sort();let r=relationFor(world,a,b);
@@ -26,7 +26,7 @@ export function recordExperience(world:World,ids:string[],kind:ExperienceEvent["
     r.familiarity=Math.min(100,r.familiarity+(kind==="work"?3:1));r.trust=Math.min(100,r.trust+(kind==="work"?2:kind==="conversation"?1:0));r.lastEventId=e.id;r.lastMinute=e.minute;
   }
   // Keep facts referenced by current memories/relationships even after the public log scrolls away.
-  const references=new Set([...Object.values(data.memories).flat().map(m=>m.eventId),...data.relations.map(r=>r.lastEventId),...(world.conversations??[]).map(c=>c.eventId)]);
+  const references=new Set([...Object.values(data.memories).flat().map(m=>m.eventId),...data.relations.map(r=>r.lastEventId),...(world.conversations??[]).map(c=>c.eventId),...(world.workHistory??[]).map(r=>r.eventId)]);
   data.facts=data.facts.filter((f,i)=>i>=data.facts.length-200||references.has(f.id));return e;
 }
 export function observeEncounters(world:World){
