@@ -8,8 +8,8 @@ describe("large outdoor map",()=>{
     for(const b of TOWN_BUILDINGS){const end={x:b.x,y:b.y+17},path=findScenePath("town",{x:620,y:370},end);
       expect(path.length,`unreachable ${b.id}`).toBeGreaterThan(1);expect(validScenePath("town",path),b.id).toBe(true);
     }
-    expect(PORTALS.filter(p=>p.source==="town")).toHaveLength(4);
-    expect(NEW_BUILDINGS.every(b=>!PORTALS.some(p=>p.id===b.id+"-door"))).toBe(true);
+    expect(PORTALS.filter(p=>p.source==="town")).toHaveLength(12);
+    expect(NEW_BUILDINGS.every(b=>PORTALS.some(p=>p.id===b.id+"-door"))).toBe(true);
   });
   it("blocks water while allowing both real bridges and stair landings",()=>{
     expect(canStand("town",{x:1870,y:900})).toBe(false);

@@ -21,7 +21,7 @@ export default function TownScene({ world, selected, onSelect, speech, onExpand,
   const [size, setSize] = useState({width:960,height:600});
   const [camera, setCamera] = useState<Camera>({zoom:1,x:0,y:0});
   const [poses,setPoses]=useState<Record<string,Pose>>(()=>Object.fromEntries(world.npcs.map(n=>[n.id,poseAt(stillAt(n.position),0)])));
-  const cameras=useRef<Record<SceneId,Camera>>({town:{zoom:1,x:0,y:0},cafe_interior:{zoom:1,x:0,y:0},home_interior:{zoom:1,x:0,y:0},store_interior:{zoom:1,x:0,y:0},cottage_interior:{zoom:1,x:0,y:0}});
+  const cameras=useRef<Record<SceneId,Camera>>(Object.fromEntries(Object.keys(SCENES).map(id=>[id,{zoom:1,x:0,y:0}])) as Record<SceneId,Camera>);
   const cameraScene=useRef<SceneId>("town");
   useEffect(()=>{
     if(cameraScene.current!==sceneId){cameras.current[cameraScene.current]=camera;cameraScene.current=sceneId;setCamera(cameras.current[sceneId]);}

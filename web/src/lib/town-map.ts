@@ -36,7 +36,7 @@ export const TOWN_BUILDINGS=[
   {id:"cafe",name:"麦香咖啡馆",use:"咖啡馆 · 进食",texture:"cafe",x:762,y:307,height:216,labelY:338,solid:{x:658,y:192,w:208,h:106}},
   {id:"store",name:"石榴杂货铺",use:"店铺 · 可探索",texture:"store",x:1158,y:307,height:220,labelY:338,solid:{x:1054,y:192,w:208,h:106}},
   {id:"cottage",name:"青篱小居",use:"住宅 · 可探索",texture:"cottage",x:1510,y:507,height:218,labelY:538,solid:{x:1410,y:392,w:200,h:106}},
-  ...NEW_BUILDINGS.map(b=>({...b,use:"规划建筑 · 室内筹备中",labelY:b.y+31,solid:{x:b.x-100,y:b.y-110,w:200,h:101}})),
+  ...NEW_BUILDINGS.map(b=>({...b,use:"独立室内 · 可探索",labelY:b.y+31,solid:{x:b.x-100,y:b.y-110,w:200,h:101}})),
 ] as const;
 export const TOWN_FENCES=[
   [94,301,82],[280,301,39],[642,301,54],[829,301,53],[99,495,247],[615,495,257],
