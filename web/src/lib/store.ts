@@ -67,6 +67,9 @@ export async function updateWorld(id: string, change: (current: World, now: numb
     const next = change(current, Number(time.rows[0].ms));
     assertWorld(next);
     if (next !== current) await client.query("UPDATE town_worlds SET revision = $2, payload = $3, updated_at = now() WHERE id = $1", [id, next.revision, JSON.stringify(next)]);
+    // Private owner association remains outside the public world. Results settle atomically.
+    for(const n of next.npcs)if(n.appointment&&JSON.stringify(n.appointment)!==JSON.stringify(current.npcs.find(old=>old.id===n.id)?.appointment))
+      await client.query("UPDATE town_invitations SET payload=$2,updated_at=now() WHERE world_id=$3 AND id=$1",[n.appointment.id,JSON.stringify(n.appointment),id]);
     await client.query("COMMIT");
     return next;
   } catch (error) {

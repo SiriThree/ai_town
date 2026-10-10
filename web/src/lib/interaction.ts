@@ -24,7 +24,8 @@ export function interactionTarget(player:Player,npcs:Npc[],positions:Record<stri
   // Facing modestly prefers the target in front; deterministic ties choose a door.
   const forward={north:{x:0,y:-1},south:{x:0,y:1},east:{x:1,y:0},west:{x:-1,y:0}}[player.facing];
   const score=(t:Interaction)=>t.distance-8*((t.position.x-player.position.x)*forward.x+(t.position.y-player.position.y)*forward.y)/Math.max(1,t.distance);
-  return targets.sort((a,b)=>score(a)-score(b)||(a.kind==="portal"?-1:b.kind==="portal"?1:a.id.localeCompare(b.id)))[0]??null;
+  // A resident standing on the doorstep must not prevent entering the building.
+  return targets.sort((a,b)=>(a.kind==="portal"&&b.kind!=="portal"?-1:b.kind==="portal"&&a.kind!=="portal"?1:0)||score(a)-score(b)||a.id.localeCompare(b.id))[0]??null;
 }
 export function busyReason(n:Npc,w:World):string|null {
   if(activeConversation(w,n.id))return `${n.name}正在和邻居交谈，请等这段话说完。`;

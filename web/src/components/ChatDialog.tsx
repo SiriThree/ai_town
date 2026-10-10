@@ -11,6 +11,7 @@ export default function SceneChat({ npc, available, onClose, onReply, onProfile,
   const input = useRef<HTMLTextAreaElement>(null);
   const alive = useRef(false);
   const sending = useRef(false);
+  const attempt=useRef<{message:string;id:string}|null>(null);
   const [turns,setTurns] = useState<ChatTurn[]>([]);
   const [draft,setDraft] = useState("");
   const [loading,setLoading] = useState(true);
@@ -47,10 +48,12 @@ export default function SceneChat({ npc, available, onClose, onReply, onProfile,
     const message=draft.trim();
     if(!available||!message||sending.current||loading||error) return;
     sending.current=true;setPending(true);setError("");
+    if(attempt.current?.message!==message)attempt.current={message,id:crypto.randomUUID()};
     try {
-      const response=await fetch(endpoint,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({message}),signal:AbortSignal.timeout(25000)});
+      const response=await fetch(endpoint,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({message,requestId:attempt.current.id}),signal:AbortSignal.timeout(25000)});
       const data=await response.json();
       if(!response.ok) throw new Error(data.error || "对话发送失败");
+      attempt.current=null;
       if(alive.current){setTurns(previous=>[...previous,data].slice(-20));setDraft("");setReplied(true);replyCallback.current(data);}
     } catch(e) {
       try {await readHistory();} catch { /* Retain the last confirmed history. */ }

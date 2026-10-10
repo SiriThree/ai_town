@@ -15,6 +15,8 @@ describe("local avatar interaction target",()=>{
     const n={...createWorld().npcs[0],position:{x:door.position.x+30,y:door.position.y+15}};
     for(let i=0;i<20;i++)expect(interactionTarget(p,[n])?.id).toBe(door.id);
     expect(enterPortal(p,interactionTarget(p,[n])!.id).sceneId).toBe("cafe_interior");
+    const doorstep={...p,position:{x:door.position.x,y:door.position.y+4}};
+    expect(interactionTarget(doorstep,[{...n,position:doorstep.position}])?.id).toBe(door.id);
   });
   it("existing street sign reads real logs, and every indoor exit remains a valid target",()=>{
     expect(interactionTarget({...newPlayer(),position:{x:NOTICE_BOARD.x,y:358}},[])?.kind).toBe("notice");

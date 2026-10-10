@@ -6,11 +6,13 @@ import {assertSocial,beginSocial,advanceConversations,type PublicConversation} f
 import {observeEncounters,assertExperiences,type Experiences} from "./experiences";
 import {RESIDENTS} from "./residents";
 import {findScenePath} from "./navigation";
+import {appointmentDecision,refreshAppointment,type Appointment} from "./appointments";
 export type LocationId = typeof TOWN_BUILDINGS[number]["id"] | "square";
 export type Point = { x: number; y: number };
 export type Action = {kind:"work"}|{kind:"help"|"approach-work";target:string}|{ kind:"walk-inside"; to:"activity"|"exit" } | { kind: "move"; to: LocationId } | { kind: "eat" | "rest" | "socialize" | "read" | "wait" | "enter" | "exit" };
 export type Decision = { action: Action; reason: string };
 export type Npc = {
+  appointment?:Appointment;
   id: string; ongoing?:OngoingAction; workTask?:WorkTask; lastHelpTaskId?:string; lastHelpMinute?:number; homeId?:LocationId; job?:"cafe"|"store"; preference?:"service"|"home"|"social"|"study"; bio?:string; appearance?:string; name: string; personality: "outgoing" | "quiet";
   hunger: number; energy: number; mood: number; location: LocationId;
   sceneId: SceneId; facing?: "north"|"south"|"east"|"west"; position: Point; action: string; reason: string; lastPath: Point[];
@@ -191,7 +193,7 @@ export function execute(npc: Npc, decision: Decision, world: World): Npc {
 }
 // Start does not apply the preview's effects. Only settlement may change needs/location.
 function beginAction(n:Npc,w:World):Npc {
-  const decision=decide(n,w),preview=execute(n,decision,w),path=preview.lastPath;
+  const decision=appointmentDecision(n,w)??decide(n,w),preview=execute(n,decision,w),path=preview.lastPath;
   const ongoing:OngoingAction={id:`action:${w.revision}:${n.id}`,decision,sceneId:n.sceneId,startedMinute:w.minute-STEP_MINUTES,
     elapsedMs:0,durationMs:actionDuration(decision.action.kind,path),path:structuredClone(path)};
   const label=path.length>1?`正在行走 · ${preview.action.replace(/^来到|^走到|^走向/,"")}`:
@@ -231,9 +233,11 @@ export function advanceWorld(world: World): World {
   const talking=advanceConversations(next);
   for (let i=0;i<next.npcs.length;i++) {
     let n=next.npcs[i];
+    refreshAppointment(n,next);
     if(talking.has(n.id))continue;
     if(!n.ongoing)n=beginAction(n,next);
     const result=progressAction(n,next);next.npcs[i]=result.npc;
+    refreshAppointment(result.npc,next);
     if(result.completed)next.events.push({id:next.revision*1000+i,minute:next.minute,npcId:n.id,text:`${n.name} · ${result.npc.action}`,reason:n.reason});
   }
   settleWork(next);beginSocial(next);observeEncounters(next);
@@ -292,6 +296,7 @@ export function assertWorld(value: unknown): asserts value is World {
   if (w.run !== undefined && (!w.run || typeof w.run.running !== "boolean" || (w.run.running ? !Number.isSafeInteger(w.run.nextTickAt) || w.run.nextTickAt! < 0 : w.run.nextTickAt !== null))) throw new Error("运行状态存档无效");
   assertExperiences(w);assertSocial(w);assertWork(w);
   for (const n of w.npcs) {
+    if(n.appointment){const a=n.appointment;if(a.target!=="cafe"||!/^[-a-f0-9]{36}$/.test(a.id)||!["accepted","waiting","travelling","arrived","failed","cancelled"].includes(a.status)||![a.createdMinute,a.updatedMinute,a.deadlineMinute].every(Number.isSafeInteger)||a.updatedMinute>w.minute||a.deadlineMinute<=a.createdMinute)throw new Error("会合约定存档无效");}
     if(n.ongoing){
       const a=n.ongoing;
       if(typeof a.id!=="string"||a.sceneId!==n.sceneId||!Number.isFinite(a.durationMs)||a.durationMs<=0||!Number.isFinite(a.elapsedMs)||a.elapsedMs<0||a.elapsedMs>=a.durationMs||!Number.isSafeInteger(a.startedMinute)||a.startedMinute>w.minute||!Array.isArray(a.path)||

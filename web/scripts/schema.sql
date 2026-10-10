@@ -24,3 +24,11 @@ CREATE TABLE IF NOT EXISTS town_private_chats (
   );
 
 ALTER TABLE town_private_chats ADD COLUMN IF NOT EXISTS player_memory jsonb;
+
+CREATE TABLE IF NOT EXISTS town_invitations (
+  world_id text NOT NULL REFERENCES town_worlds(id), npc_id text NOT NULL,
+  visitor_id text NOT NULL CHECK(visitor_id ~ '^[a-f0-9]{64}$'),
+  request_id uuid NOT NULL, id uuid NOT NULL UNIQUE, payload jsonb NOT NULL,
+  response jsonb NOT NULL, updated_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY(world_id,npc_id,visitor_id,request_id)
+);

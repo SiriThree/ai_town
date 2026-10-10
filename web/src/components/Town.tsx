@@ -139,6 +139,13 @@ export default function Town() {
     finally { lock.current=false; setPending(false); }
   }
   const npc = world?.npcs.find(n => n.id === selected);
+  function receiveReply(turn:ChatTurn|null){
+    setSpeech(turn?{npcId:selected,turn}:null);
+    // An invitation can commit a world revision. Synchronize before enabling run/tick.
+    if(turn&&current.current&&turn.worldRevision>current.current.revision){
+      setSyncing(true);void load().then(commit).catch(()=>setSyncError("会合已回复，世界状态读取失败，请重读。")).finally(()=>setSyncing(false));
+    }
+  }
   const present=npc?.sceneId===sceneId;
   const chatAvailable=!!npc&&nearbyIds.split(",").includes(npc.id)&&!!world&&!busyReason(npc,world);
   const feedback=chatOpen&&npc?chatFeedback(npc.name,chatPhase,present,chatAvailable):interactionMessage;
@@ -160,7 +167,7 @@ export default function Town() {
           <button disabled={pending||syncing||npc.hunger<=0} onClick={feed}>送食物 <small>饥饿 −{FOOD_AMOUNT}</small></button>
           <p data-testid="food-feedback">{foodFeedback?.npcId===npc.id?foodFeedback.text:npc.hunger<=0?"已经吃饱，暂不需要食物。":"提供食物不会改变地点或直接指定下一步行动。"}</p>
         </div>}
-        {chatOpen && npc && <SceneChat key={npc.id} npc={npc} onClose={closeChat} available={chatAvailable} onPhaseChange={setChatPhase} onReply={turn=>setSpeech(turn ? {npcId:npc.id,turn} : null)} onProfile={()=>setPanel(panel==="profile"?null:"profile")} historyOpen={historyOpen} onHistory={setHistoryOpen} />}
+        {chatOpen && npc && <SceneChat key={npc.id} npc={npc} onClose={closeChat} available={chatAvailable} onPhaseChange={setChatPhase} onReply={receiveReply} onProfile={()=>setPanel(panel==="profile"?null:"profile")} historyOpen={historyOpen} onHistory={setHistoryOpen} />}
         </div>
         {panel === "profile" && npc && <aside className="paper profile" aria-label="居民档案" data-testid="profile">
           <div className="panel-heading"><span>居 民 档 案</span><button aria-label="关闭档案" onClick={() => setPanel(null)}>×</button></div>

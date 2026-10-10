@@ -1,8 +1,9 @@
 export const MAX_MESSAGE = 500;
 export const MAX_REPLY = 4000;
 export const HISTORY_TURNS = 20;
-export type FallbackReason = "not_configured" | "disabled" | "invalid_config" | "timeout" | "network" | "service_error" | "invalid_response" | "budget_exhausted" | "busy";
+export type FallbackReason = "controlled_action" | "not_configured" | "disabled" | "invalid_config" | "timeout" | "network" | "service_error" | "invalid_response" | "budget_exhausted" | "busy";
 export const FALLBACK_LABELS: Record<FallbackReason, string> = {
+  controlled_action:"后台确认的约定回复",
   busy:"模型繁忙，本地回复",
   budget_exhausted: "今日模型额度已用完",
   not_configured: "未配置模型", disabled: "未启用模型", invalid_config: "模型配置不可用",

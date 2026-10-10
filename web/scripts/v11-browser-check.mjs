@@ -9,6 +9,7 @@ process.env.PLAYWRIGHT_BROWSERS_PATH=path.resolve('.browsers');
 const {chromium,expect}=await import('@playwright/test');
 const {database}=await import('../src/lib/store.ts');
 const {createWorld,populateResidents}=await import('../src/lib/world.ts');
+const {findScenePath}=await import('../src/lib/navigation.ts');
 const url=new URL(process.env.DATABASE_URL||'');assert.equal(url.hostname,'127.0.0.1');assert.equal(url.port,'55488');assert.equal(url.pathname,'/ai_town_mvp_test');
 const stage=process.env.V11_STAGE||'memory',dir=`evidence/v11/${stage}-browser`,id=`v11-${randomUUID()}`,base='http://127.0.0.1:3126';
 await mkdir(dir,{recursive:true});const log=createWriteStream(`${dir}/server.log`);let server,browser,a,b,p,calls=0;const checks=[],errors=[],contexts=[];
@@ -27,6 +28,12 @@ async function start(){server=spawn(process.execPath,['node_modules/next/dist/bi
 async function stop(){if(server&&server.exitCode===null&&!server.signalCode)await new Promise(r=>{server.once('exit',r);server.kill();});}
 async function send(message){await p.locator('textarea').fill(message);const result=p.waitForResponse(r=>r.url().endsWith('/aning/chat')&&r.request().method()==='POST');await p.getByRole('button',{name:'发送消息',exact:true}).click();const r=await result;assert.equal(r.status(),200);const turn=await r.json();await expect(p.locator('textarea')).toHaveValue('');return turn;}
 const get=async()=>await(await fetch(base+'/api/world')).json();
+async function move(axis,target){
+ await p.getByTestId('scene-viewport').focus();const value=()=>p.getByTestId('player').getAttribute(`data-${axis}`).then(Number);let current=await value();
+ if(Math.abs(target-current)>10){const positive=target>current,key=axis==='x'?(positive?'d':'a'):(positive?'s':'w');await p.keyboard.down(key);try{await p.waitForFunction(({axis,target,positive})=>{const v=Number(document.querySelector('[data-testid="player"]').dataset[axis]);return positive?v>=target-8:v<=target+8;},{axis,target,positive},{timeout:20000});}finally{await p.keyboard.up(key);}}
+ for(let i=0;i<35;i++){current=await value();if(Math.abs(target-current)<=1.8)return;const key=axis==='x'?(target>current?'d':'a'):(target>current?'s':'w');await p.keyboard.down(key);await delay(8);await p.keyboard.up(key);await delay(16);}throw Error(`alignment ${axis} ${target} ${await value()}`);
+}
+async function walk(to){const el=p.getByTestId('player'),scene=await el.getAttribute('data-scene'),from={x:Number(await el.getAttribute('data-x')),y:Number(await el.getAttribute('data-y'))};const route=findScenePath(scene,from,to);assert.ok(route.length);for(const point of route.slice(1)){await move('x',point.x);await move('y',point.y);}}
 try{
  const seed=populateResidents(createWorld());for(const n of seed.npcs)Object.assign(n,{hunger:20,energy:85,mood:95});seed.run={running:false,nextTickAt:null};
  await database().query('INSERT INTO town_worlds(id,revision,payload) VALUES($1,$2,$3)',[id,seed.revision,JSON.stringify(seed)]);
@@ -46,6 +53,22 @@ try{
  for(const testMode of ['failure','timeout']){mode=testMode;const t=await send('你还记得我吗');assert.equal(t.source,'fallback');assert.match(t.reply,/小舟/);assert.equal(t.reason,testMode==='failure'?'service_error':'timeout');}mode='normal';
  await p.screenshot({path:`${dir}/04-fallback.png`,fullPage:true});checks.push('model 503/timeout preserve truthful private memory; no external model');
  assert.deepEqual(await get(),before);assert.equal(errors.length,0);assert.ok(contexts.some(ms=>ms[0].content.includes('"name":"小舟"')));
+ if(stage!=='memory'){
+  const invitation=await send('我们一起去咖啡馆吧');assert.equal(invitation.reason,'controlled_action');
+  await p.screenshot({path:`${dir}/05-invitation.png`,fullPage:true});
+  const accepted=await get();assert.equal(accepted.npcs[1].appointment.status,'accepted');await stop();await start();assert.deepEqual(await get(),accepted);
+  await p.getByRole('button',{name:'开始自动运行',exact:true}).click();
+  await expect.poll(async()=>(await get()).npcs[1].appointment.status,{timeout:12000}).toBe('arrived');
+  await p.getByRole('button',{name:'暂停自动运行',exact:true}).click();await expect.poll(async()=>(await get()).run.running).toBe(false);
+  const arrived=await get();assert.equal(arrived.npcs[1].sceneId,'cafe_interior');
+  await p.getByTestId('scene-viewport').focus();await p.keyboard.press('Escape');await walk({x:762,y:324});await p.keyboard.press('e');await expect(p.getByTestId('scene-canvas')).toHaveAttribute('data-scene','cafe_interior');
+  await move('y',450);await p.keyboard.press('e');await expect(p.getByTestId('scene-composer')).toContainText('阿宁');
+  assert.match((await send('还记得我们的约定吗')).reply,/按约到了/);
+  await p.screenshot({path:`${dir}/06-meeting.png`,fullPage:true});
+  const own=await(await a.request.get(base+'/api/npcs/aning/chat')).json();assert.equal(own.appointments[0].status,'arrived');
+  const other=await(await b.request.get(base+'/api/npcs/aning/chat')).json();assert.deepEqual(other.appointments,[]);
+  checks.push('browser invite, pending backend restart, automatic real road/portal arrival; player walks from square into cafe, private completed meeting recalled');
+ }
  await writeFile(`${dir}/result.json`,JSON.stringify({id,checks,calls,externalCalls:0,errors},null,2));
  const video=p.video();await a.close();a=null;await rename(await video.path(),`${dir}/journey.webm`);console.log(JSON.stringify({id,checks,calls}));
 }catch(error){await p?.screenshot({path:`${dir}/failure.png`,fullPage:true});throw error;}finally{await a?.close();await b?.close();await browser?.close();await stop();model.closeAllConnections();await new Promise(r=>model.close(r));log.end();await database().end();}

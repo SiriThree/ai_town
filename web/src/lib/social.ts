@@ -19,6 +19,7 @@ export function advanceConversations(w:World){
   return held;
 }
 export function canTalk(a:Npc,b:Npc,w:World){
+  if([a,b].some(n=>n.appointment&&["accepted","waiting","travelling"].includes(n.appointment.status)))return false;
   if(a.id===b.id||a.sceneId!==b.sceneId||Math.hypot(a.position.x-b.position.x,a.position.y-b.position.y)>100)return false;
   if([a,b].some(n=>activeConversation(w,n.id)|| (n.ongoing&&!["read","wait","socialize"].includes(n.ongoing.decision.action.kind)) || n.lastPath.length||n.energy<30||n.hunger>=65||/休息|制作|理货|整理|协助/.test(n.action)))return false;
   if(![a,b].some(n=>n.personality==="outgoing"&&n.mood<85)&&(relationFor(w,a.id,b.id)?.familiarity??0)<5)return false;
