@@ -86,6 +86,16 @@ export default function Town() {
     window.addEventListener("keydown",escape,true);return()=>window.removeEventListener("keydown",escape,true);
   },[]);
   const hasWorld = !!world;
+  useEffect(()=>{
+    if(!hasWorld)return;
+    let active=true;
+    const timer=setInterval(()=>{
+      const w=current.current,p=playerPosition.current;if(!w||!p||p.sceneId!=="town"||Math.hypot(p.position.x-480,p.position.y-368)>140||!w.gatherings?.some(a=>a.status==="active"&&a.responses.some(r=>r.status==="participated")))return;
+      // Establish/verify the same signed visitor before reporting a local encounter.
+      void request('/api/world/notices').then(({response})=>response.ok?request('/api/world/notices',{action:"presence",presence:p}):null).then(r=>{if(active&&r?.response.ok)commit(r.value.world);}).catch(()=>{});
+    },10000);
+    return()=>{active=false;clearInterval(timer);};
+  },[hasWorld,commit]);
   useEffect(() => {
     if (!hasWorld) return;
     let active = true;
@@ -163,7 +173,7 @@ export default function Town() {
       <button className="advance" disabled={pending || syncing || !world} onClick={advance}>{pending ? "处理中…" : "推进一步"}<span aria-hidden> ▷</span></button>
       <button className="help-toggle" onClick={()=>setHelpOpen(!helpOpen)} aria-expanded={helpOpen}>帮助</button>
     </header>
-    {helpOpen&&<aside className="paper game-help" aria-label="玩法与隐私"><div className="panel-heading"><strong>在小镇生活</strong><button onClick={()=>setHelpOpen(false)} aria-label="关闭帮助">×</button></div><p>WASD / 方向键移动，靠近门口或居民按 E。输入时 Enter 发送，Shift + Enter 换行，Esc 告别。</p><p>可以邀请居民在麦香咖啡馆见面。居民会考虑手头的事；答应后你也需要自己走过去。暂停时间时，大家暂不行动。</p><p>这里是共同生活的小镇：访客共享时间和居民状态。私聊与认识记录仅属于当前浏览器身份；请勿输入敏感信息。清除 Cookie、换设备或30天过期后，居民无法认作同一位访客。已确认的赴约行动会公开可见，私聊原文不会。</p><p>无人打开网页时，小镇不会自行快进。</p><label><input type="checkbox" checked={diagnostics} onChange={e=>setDiagnostics(e.target.checked)}/> 开发诊断</label></aside>}
+    {helpOpen&&<aside className="paper game-help" aria-label="玩法与隐私"><div className="panel-heading"><strong>在小镇生活</strong><button onClick={()=>setHelpOpen(false)} aria-label="关闭帮助">×</button></div><p>WASD / 方向键移动，靠近门口或居民按 E。输入时 Enter 发送，Shift + Enter 换行，Esc 告别。</p><p>可以邀请居民在麦香咖啡馆见面。居民会考虑手头的事；答应后你也需要自己走过去。暂停时间时，大家暂不行动。</p><p>这里是共同生活的小镇：访客共享时间和居民状态。私聊与认识记录仅属于当前浏览器身份；请勿输入敏感信息。清除 Cookie、换设备或30天过期后，居民无法认作同一位访客。已确认的赴约行动会公开可见，私聊原文不会。</p><p>走近咖啡馆旁原有公告板按 E，可发布树荫广场聚会。选择世界日期和时间，居民会自行决定参加与否；公告公开，私聊不会附带公开。</p><p>无人打开网页时，小镇不会自行快进。</p><label><input type="checkbox" checked={diagnostics} onChange={e=>setDiagnostics(e.target.checked)}/> 开发诊断</label></aside>}
     {(diagnostics||error||syncError)&&<div className="status-line"><p role="status">{error || syncError || message}</p>{diagnostics&&<span>网页打开时自动推进 · 无离线补算</span>}{error && <button disabled={pending} onClick={reload}>重新读取</button>}</div>}
     {world ? <>
       <section className={`scene-frame ${sceneId!=="town"?"interior":""}`}>

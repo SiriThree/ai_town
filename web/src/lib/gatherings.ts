@@ -3,10 +3,11 @@ import {buildingIn,nearPortal,portalById,portalSpawn,validScenePath} from "./sce
 import {findScenePath} from "./navigation";
 import {actionDuration,STEP_MS,STEP_MINUTES} from "./action-time";
 import {activeAppointment} from "./appointments";
+import {recordExperience} from "./experiences";
 
-export type Attendance={npcId:string;status:"accepted"|"declined"|"deferred"|"travelling"|"arrived"|"participated"|"missed"|"cancelled";reason:string;notifiedMinute:number;updatedMinute:number;arrivedMinute?:number;participatedMinute?:number;eventId?:number};
+export type Attendance={npcId:string;status:"accepted"|"declined"|"deferred"|"travelling"|"arrived"|"participated"|"missed"|"cancelled";reason:string;notifiedMinute:number;updatedMinute:number;arrivedMinute?:number;participatedMinute?:number;departedMinute?:number;eventId?:number;history?:{status:Attendance["status"];minute:number;reason:string}[]};
 // Public content only. Visitor credentials and private acquaintance stay in SQL.
-export type Gathering={id:string;worldId:string;kind:"gathering";content:string;location:"square";createdMinute:number;startMinute:number;endMinute:number;status:"scheduled"|"active"|"ended"|"cancelled";responses:Attendance[];result?:string};
+export type Gathering={id:string;worldId:string;kind:"gathering";content:string;location:"square";createdMinute:number;startMinute:number;endMinute:number;status:"scheduled"|"active"|"ended"|"cancelled";responses:Attendance[];conversationIds?:string[];result?:string};
 export const activeGathering=(a:Gathering)=>a.status==="scheduled"||a.status==="active";
 export function squareAction(n:Npc):Decision["action"]{
  const b=buildingIn(n.sceneId);
@@ -35,7 +36,9 @@ export function assessGathering(n:Npc,w:World,a:Gathering,knownPublisher=false):
 }
 export function notifyGathering(w:World,a:Gathering,known:Record<string,boolean>={}){
  a.responses=w.npcs.map(n=>({npcId:n.id,...assessGathering(n,w,a,known[n.id]),notifiedMinute:w.minute,updatedMinute:w.minute}));
+ rememberResponses(a);
 }
+export function rememberResponses(a:Gathering){for(const r of a.responses){const last=r.history?.at(-1);if(last?.status===r.status&&last.reason===r.reason)continue;const h=r.history??[];r.history=[...(h.length>=12?[h[0],...h.slice(-10)]:h),{status:r.status,minute:r.updatedMinute,reason:r.reason}];}}
 function note(w:World,npcId:string,text:string,reason:string){w.events.push({id:Math.max(w.revision*1000+850,...w.events.map(e=>e.id+1)),minute:w.minute,npcId,text,reason});}
 function response(a:Gathering,n:Npc){return a.responses.find(r=>r.npcId===n.id);}
 function blocked(n:Npc,w:World){return privateCommitment(n,w)||n.workTask?.phase==="active"||n.energy<=25||n.hunger>=85;}
@@ -46,12 +49,14 @@ export function refreshGatherings(w:World){
    a.status="ended";
    for(const r of a.responses)if(!["participated","declined","cancelled"].includes(r.status)){r.status="missed";r.updatedMinute=w.minute;r.reason="活动结束，未完成实际参加。";}
    const names=a.responses.filter(r=>r.status==="participated").map(r=>w.npcs.find(n=>n.id===r.npcId)!.name);
-   a.result=names.length?`聚会结束，${names.join("、")}实际参加。`:"聚会结束，本次没有居民实际参加。";
+   a.conversationIds=(w.conversations??[]).filter(c=>c.timeline?.completed&&c.minute>=a.startMinute&&c.minute<a.endMinute&&c.participants.every(id=>a.responses.some(r=>r.npcId===id&&r.participatedMinute!==undefined))).map(c=>c.id);
+   a.result=names.length?`聚会结束，${names.join("、")}实际参加；完成${a.conversationIds.length}段居民交流。`:"聚会结束，本次没有居民实际参加。";
    note(w,w.npcs[0].id,a.result,`公开活动 ${a.id}，根据已保存的参加时间结算。`);continue;
   }
   if(w.minute>=a.startMinute)a.status="active";
   for(const n of w.npcs){
-   const r=response(a,n);if(!r||["declined","cancelled","missed","participated"].includes(r.status))continue;
+   const r=response(a,n);if(r?.status==="participated"&&!atGathering(n)&&r.departedMinute===undefined){r.departedMinute=w.minute;r.reason="已实际参加，随后离场继续处理日常事务。";r.updatedMinute=w.minute;}
+   if(!r||["declined","cancelled","missed","participated"].includes(r.status))continue;
    if(blocked(n,w)){
     if(r.status!=="deferred"){r.status="deferred";r.reason="先处理重要事务，聚会若来得及再去。";r.updatedMinute=w.minute;delete r.arrivedMinute;}
     continue;
@@ -63,15 +68,34 @@ export function refreshGatherings(w:World){
    if(r.status==="arrived"&&!atGathering(n)){r.status="accepted";delete r.arrivedMinute;}
    if(atGathering(n)&&w.minute>=a.startMinute-30&&(!n.ongoing||["wait","read","socialize"].includes(n.ongoing.decision.action.kind))){
     if(r.status!=="arrived"){r.status="arrived";r.arrivedMinute=w.minute;r.updatedMinute=w.minute;r.reason="已到广场，等聚会开始。";note(w,n.id,`${n.name}来到广场等候聚会`,`活动 ${a.id}；到场不等于已经参加。`);}
-    if(w.minute>=Math.max(a.startMinute,r.arrivedMinute!)+6){r.status="participated";r.participatedMinute=w.minute;r.updatedMinute=w.minute;r.reason="在活动时间内实际停留，参加了聚会。";note(w,n.id,`${n.name}实际参加广场聚会`,`活动 ${a.id}；已确认同场景、活动区域及停留时间。`);}
+    if(w.minute>=Math.max(a.startMinute,r.arrivedMinute!)+6){r.status="participated";r.participatedMinute=w.minute;r.updatedMinute=w.minute;r.reason="在活动时间内实际停留，参加了聚会。";
+     const fact=recordExperience(w,[n.id],"gathering",`gathering:${a.id}:${n.id}`,`${n.name}在树荫广场实际参加第${Math.floor(a.startMinute/1440)+1}天的公共聚会。`);r.eventId=fact?.id;
+    }
    }
   }
  }
+ for(const a of w.gatherings??[])rememberResponses(a);
+}
+// Public notice knowledge differs from firsthand participation. Never includes visitor identity.
+export function gatheringKnowledge(w:World,n:Npc,message=""){
+ const day=/昨天/.test(message)?Math.floor(w.minute/1440)-1:/今天/.test(message)?Math.floor(w.minute/1440):null;
+ const notices=(w.gatherings??[]).filter(a=>a.responses.some(r=>r.npcId===n.id)&&(day===null||Math.floor(a.startMinute/1440)===day)).slice(-3);
+ const facts=(w.experiences?.facts??[]).filter(f=>f.kind==="gathering"&&f.knownBy.includes(n.id)&&(day===null||Math.floor(f.minute/1440)===day)).slice(-4);
+ const talks=(w.conversations??[]).filter(c=>c.timeline?.completed&&c.participants.includes(n.id)&&notices.some(a=>c.minute>=a.startMinute&&c.minute<a.endMinute&&a.responses.some(r=>r.npcId===n.id&&r.participatedMinute!==undefined))).slice(-3).map(c=>({eventId:c.eventId,minute:c.minute,participants:c.participants}));
+ return {publicNotices:notices.map(a=>({id:a.id,content:a.content,startMinute:a.startMinute,status:a.status,result:a.result,myResponse:response(a,n)})),firsthandFacts:facts,actualConversations:talks};
+}
+export function gatheringRecall(n:Npc,w:World,message:string){
+ if(!/聚会|公告|公共活动/.test(message))return;
+ const k=gatheringKnowledge(w,n,message),f=k.firsthandFacts.find(f=>f.key.startsWith("gathering:"));
+ if(f)return `记得，第${Math.floor(f.minute/1440)+1}天我在广场参加过聚会。`;
+ if(k.publicNotices.length)return "我知道那份公告，但没有亲自参加的记录。";
+ return "我还没有这次聚会的可靠记录，不能猜。";
 }
 export function gatheringDecision(n:Npc,w:World):Decision|null{
  const a=w.gatherings?.find(a=>activeGathering(a)&&["accepted","travelling","arrived","participated"].includes(response(a,n)?.status??""));
  if(!a||blocked(n,w))return null;
  const r=response(a,n)!;
+ if(r.status==="participated"&&!atGathering(n))return null;
  if(atGathering(n)&&w.minute>=a.startMinute-30)return {action:{kind:"wait"},reason:"在广场等候或参加已接受的公共聚会。"};
  const travel=squareTravelMinutes(n,w);
  if(travel===null||w.minute+travel>=a.endMinute-6){r.status="missed";r.reason="当前没有能及时到场的合法路线。";r.updatedMinute=w.minute;return null;}

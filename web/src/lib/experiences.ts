@@ -1,5 +1,5 @@
 import type {World,Npc,TownEvent} from "./world";
-export type ExperienceEvent=TownEvent&{kind:"encounter"|"conversation"|"work";key:string;sceneId:Npc["sceneId"];participants:string[];knownBy:string[];visibility:"public";result:string};
+export type ExperienceEvent=TownEvent&{kind:"encounter"|"conversation"|"work"|"gathering";key:string;sceneId:Npc["sceneId"];participants:string[];knownBy:string[];visibility:"public";result:string};
 export type Memory={eventId:number;minute:number;summary:string;people:string[];sceneId:Npc["sceneId"];importance:number;opinion:string};
 export type Relation={a:string;b:string;familiarity:number;trust:number;lastEventId:number;lastMinute:number};
 export type Experiences={facts:ExperienceEvent[];memories:Record<string,Memory[]>;relations:Relation[]};
@@ -17,10 +17,10 @@ export function recordExperience(world:World,ids:string[],kind:ExperienceEvent["
     minute:world.minute,npcId:first.id,kind,key,sceneId:first.sceneId,participants:[...ids],knownBy:[...ids],visibility:"public",result,
     text:result,reason:"由后台根据实际在场、行动和执行结果确认；主观看法不改变世界事实。"};
   data.facts.push(e);world.events.push(e);
-  for(const n of present){const memory:Memory={eventId:e.id,minute:e.minute,summary:result,people:ids.filter(id=>id!==n.id),sceneId:e.sceneId,importance:kind==="work"?3:2,
-    opinion:present.length===1?"我的感受：完成手边的事情让我踏实；这不代表其他居民的看法。":n.personality==="outgoing"?"我的感受：和邻居一起经历日常，让我觉得亲近。":"我的感受：我记下了这次经历，想再慢慢了解对方。"};
+  for(const n of present){const memory:Memory={eventId:e.id,minute:e.minute,summary:result,people:ids.filter(id=>id!==n.id),sceneId:e.sceneId,importance:kind==="work"||kind==="gathering"?3:2,
+    opinion:kind==="gathering"?(n.personality==="outgoing"?"我的感受：能参与小镇聚会很开心。":"我的感受：我愿意静静感受这次相聚。"):present.length===1?"我的感受：完成手边的事情让我踏实；这不代表其他居民的看法。":n.personality==="outgoing"?"我的感受：和邻居一起经历日常，让我觉得亲近。":"我的感受：我记下了这次经历，想再慢慢了解对方。"};
     data.memories[n.id]=[...(data.memories[n.id]??[]),memory].slice(-20);}
-  for(let i=0;i<ids.length;i++)for(let j=i+1;j<ids.length;j++){
+  for(let i=0;kind!=="gathering"&&i<ids.length;i++)for(let j=i+1;j<ids.length;j++){
     const [a,b]=[ids[i],ids[j]].sort();let r=relationFor(world,a,b);
     if(!r){r={a,b,familiarity:0,trust:0,lastEventId:e.id,lastMinute:e.minute};data.relations.push(r);}
     r.familiarity=Math.min(100,r.familiarity+(kind==="work"?3:1));r.trust=Math.min(100,r.trust+(kind==="work"?2:0));r.lastEventId=e.id;r.lastMinute=e.minute;
@@ -33,6 +33,8 @@ export function observeEncounters(world:World){
   if(!world.rosterVersion)return;
   const used=new Set<string>((world.experiences?.facts??[]).filter(e=>e.id>=world.revision*1000&&e.id<(world.revision+1)*1000).flatMap(e=>e.participants));
   for(const a of world.npcs)for(const b of world.npcs){
+    // Attendance itself is not a relationship event. Actual dialogue still records its own source.
+    if(world.gatherings?.some(g=>g.status==="active"&&[a.id,b.id].every(id=>g.responses.some(r=>r.npcId===id&&["arrived","participated"].includes(r.status)))))continue;
     if(a.id>=b.id||used.has(a.id)||used.has(b.id)||a.sceneId!==b.sceneId||a.lastPath.length||b.lastPath.length||a.energy<25||b.energy<25||a.hunger>=65||b.hunger>=65)continue;
     if(Math.hypot(a.position.x-b.position.x,a.position.y-b.position.y)>100)continue;
     const relation=relationFor(world,a.id,b.id);if(relation&&world.minute-relation.lastMinute<90)continue;

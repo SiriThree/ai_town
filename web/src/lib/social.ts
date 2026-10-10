@@ -22,7 +22,8 @@ export function canTalk(a:Npc,b:Npc,w:World){
   if([a,b].some(n=>n.appointment&&["accepted","waiting","travelling"].includes(n.appointment.status)))return false;
   if(a.id===b.id||a.sceneId!==b.sceneId||Math.hypot(a.position.x-b.position.x,a.position.y-b.position.y)>100)return false;
   if([a,b].some(n=>activeConversation(w,n.id)|| (n.ongoing&&!["read","wait","socialize"].includes(n.ongoing.decision.action.kind)) || n.lastPath.length||n.energy<30||n.hunger>=65||/休息|制作|理货|整理|协助/.test(n.action)))return false;
-  if(![a,b].some(n=>n.personality==="outgoing"&&n.mood<85)&&(relationFor(w,a.id,b.id)?.familiarity??0)<5)return false;
+  const sharedGathering=w.gatherings?.some(g=>g.status==="active"&&[a,b].every(n=>g.responses.some(r=>r.npcId===n.id&&r.status==="participated")));
+  if(!sharedGathering&&![a,b].some(n=>n.personality==="outgoing"&&n.mood<85)&&(relationFor(w,a.id,b.id)?.familiarity??0)<5)return false;
   return !w.conversations?.some(c=>w.minute-c.minute<120&&c.participants.some(id=>id===a.id||id===b.id));
 }
 export function beginSocial(world:World){
@@ -37,7 +38,8 @@ export function beginSocial(world:World){
     const event=recordExperience(world,[a.id,b.id],"conversation",id,`${a.name}与${b.name}在${place}碰面并交谈。`);if(!event)return;
     const familiar=(relationFor(world,a.id,b.id)?.familiarity??0)>1;
     const sharedWork=world.experiences?.facts.some(f=>f.kind==="work"&&[a.id,b.id].every(id=>f.participants.includes(id)));
-    const lines=[sharedWork?`${b.name}，上次一起做事，多谢你帮忙。`:
+    const gathering=world.gatherings?.some(g=>g.status==="active"&&[a,b].every(n=>g.responses.some(r=>r.npcId===n.id&&r.status==="participated")));
+    const lines=[gathering?`${b.name}，在广场聚会见到你真好。`:sharedWork?`${b.name}，上次一起做事，多谢你帮忙。`:
       `${b.name}，${familiar?"又见面了，最近过得怎么样？":"歇一会儿，聊聊今天的近况？"}`,
       b.personality==="quiet"?"嗯，慢慢聊一会儿，我很愿意听。":"好呀，见到你真高兴！最近还顺利吗？"];
     const c:PublicConversation={id,eventId:event.id,minute:world.minute,sceneId:a.sceneId,participants:[a.id,b.id],speakers:structuredClone([a,b]),turns:[a,b].map((n,i)=>({npcId:n.id,reply:lines[i],source:"fallback",reason:"disabled"})),modelState:"local",timeline:{turnIndex:0,elapsedMs:0,completed:false}};
