@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {busyReason} from "../lib/interaction";
 import {chatFeedback,type ChatPhase} from "../lib/chat-feedback";
 import {personalMemories} from "../lib/experiences";
+import NoticeBoard from "./NoticeBoard";
 import TownScene from "./TownScene";
 import SceneChat from "./ChatDialog";
 import { SCENES, type SceneId,type Player } from "../lib/player-scene";
@@ -43,7 +44,7 @@ export default function Town() {
   const [syncError, setSyncError] = useState("");
   const [foodFeedback, setFoodFeedback] = useState<{npcId:string;text:string}|null>(null);
   const [selected, setSelected] = useState("");
-  const [panel, setPanel] = useState<"profile" | "log" | null>(null);
+  const [panel, setPanel] = useState<"profile" | "log" | "notice" | null>(null);
   const [chatOpen, setChatOpen] = useState(false);
   const [chatPhase,setChatPhase]=useState<ChatPhase>("ready");
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -166,7 +167,7 @@ export default function Town() {
     {(diagnostics||error||syncError)&&<div className="status-line"><p role="status">{error || syncError || message}</p>{diagnostics&&<span>网页打开时自动推进 · 无离线补算</span>}{error && <button disabled={pending} onClick={reload}>重新读取</button>}</div>}
     {world ? <>
       <section className={`scene-frame ${sceneId!=="town"?"interior":""}`}>
-        <TownScene onPlayerChange={rememberPosition} diagnostics={diagnostics} onTalk={talk} onNearChange={setNearbyIds} onPublicHistory={()=>setPanel("log")} controlsBlocked={panel!==null||(historyOpen&&!!present)} onSceneChange={setSceneId} world={world} selected={selected} onSelect={select} speech={chatOpen && speech?.npcId===selected ? speech.turn : null} onExpand={()=>setHistoryOpen(true)} />
+        <TownScene onNotice={()=>{setChatOpen(false);setPanel("notice");}} onPlayerChange={rememberPosition} diagnostics={diagnostics} onTalk={talk} onNearChange={setNearbyIds} onPublicHistory={()=>setPanel("log")} controlsBlocked={panel!==null||(historyOpen&&!!present)} onSceneChange={setSceneId} world={world} selected={selected} onSelect={select} speech={chatOpen && speech?.npcId===selected ? speech.turn : null} onExpand={()=>setHistoryOpen(true)} />
         {feedback&&(diagnostics||!chatOpen||chatPhase==="sending"||chatPhase==="error")&&<p className="interaction-feedback" role="status" data-testid="interaction-feedback">{feedback}</p>}
         <div className="interaction-dock" hidden={!present}>
         {npc && panel==="profile" && <div className="resident-care" aria-label="居民干预" onPointerDown={e=>e.stopPropagation()} onKeyDown={e=>e.stopPropagation()}>
@@ -188,6 +189,7 @@ export default function Town() {
           <button className="profile-chat" disabled={pending||!present||!nearbyIds.split(",").includes(npc.id)} onClick={()=>talk(npc.id)}>靠近后与{npc.name}对话 <span aria-hidden>↗</span></button>
         </aside>}
       </section>
+      {panel==="notice"&&<NoticeBoard world={world} commit={commit} diagnostics={diagnostics} onClose={()=>setPanel(null)}/> }
       <section className="town-bottom">
         {diagnostics&&<div className="residents"><small>今日居民</small><div>{world.npcs.map(n => <button key={n.id} disabled={n.sceneId!==sceneId} aria-pressed={selected===n.id} onClick={() => select(n.id)}><span className={`resident-dot ${n.id}`} />{n.name}<span className="resident-action">{n.sceneId!==sceneId?SCENES[n.sceneId].name:n.action}</span></button>)}</div></div>}
         <div className="latest"><div className="latest-title"><button onClick={() => setPanel("log")}>打开日志 <span aria-hidden>↗</span></button></div><div data-testid="latest-events">{world.events.length ? world.events.slice(-2).map(e => <p key={e.id}><time>{worldTime(e.minute).split(" · ")[1]}</time>{e.text}</p>) : <p className="muted">清晨的小镇刚刚醒来，日常将在下一步发生。</p>}</div></div>

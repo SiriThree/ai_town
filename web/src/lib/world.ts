@@ -1,3 +1,4 @@
+import type {Gathering} from "./gatherings";
 import {STEP_MS,STEP_MINUTES,WALK_SPEED,pathLength,pathPoint,pathSection,actionDuration,type OngoingAction} from "./action-time";
 import {prepareWork,settleWork,assertWork,workPoint,helperPoint,helpTarget,taskName,type WorkTask,type WorkResult} from "./work";
 import {buildingAt,buildingIn,portalById,nearPortal,HOME_REST,homePath,validScenePath,npcCafeSpawn,canStand,portalSpawn,type SceneId} from "./scene-data";
@@ -19,7 +20,7 @@ export type Npc = {
 };
 export type TownEvent = { id: number; minute: number; npcId: Npc["id"]; text: string; reason: string };
 export type World = {
-  schemaVersion: 2; workOutputs?:{cafe:number;store:number}; workHistory?:WorkResult[]; rosterVersion?:1; experiences?:Experiences; conversations?:PublicConversation[]; socialBudget?:{day:number;used:number}; revision: number; name: string; minute: number;
+  schemaVersion: 2; gatherings?:Gathering[]; workOutputs?:{cafe:number;store:number}; workHistory?:WorkResult[]; rosterVersion?:1; experiences?:Experiences; conversations?:PublicConversation[]; socialBudget?:{day:number;used:number}; revision: number; name: string; minute: number;
   run?: { running: boolean; nextTickAt: number | null };
   locations: { id: LocationId; name: string; use: string }[];
   npcs: Npc[]; events: TownEvent[];

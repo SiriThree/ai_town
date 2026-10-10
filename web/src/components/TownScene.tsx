@@ -13,7 +13,7 @@ import {interactionTarget,nearbyResidents,NOTICE_BOARD} from "../lib/interaction
 import {INTERIORS} from "../lib/scene-data";
 import { MAP, runState, worldTime, type World } from "../lib/world";
 
-export default function TownScene({ diagnostics=false, world, selected, onSelect, speech, onExpand, onPublicHistory, onTalk, onNearChange, onPlayerChange, controlsBlocked, onSceneChange }: { diagnostics?:boolean; onPlayerChange:(player:Player)=>void; onTalk:(id:string)=>void; onNearChange:(ids:string)=>void; onPublicHistory:()=>void; controlsBlocked:boolean; onSceneChange:(id:SceneId)=>void; world: World; selected: string; onSelect: (id: string) => void; speech: ChatTurn | null; onExpand: () => void }) {
+export default function TownScene({ diagnostics=false, world, selected, onSelect, speech, onExpand, onPublicHistory, onNotice, onTalk, onNearChange, onPlayerChange, controlsBlocked, onSceneChange }: { diagnostics?:boolean; onPlayerChange:(player:Player)=>void; onTalk:(id:string)=>void; onNearChange:(ids:string)=>void; onPublicHistory:()=>void; onNotice:()=>void; controlsBlocked:boolean; onSceneChange:(id:SceneId)=>void; world: World; selected: string; onSelect: (id: string) => void; speech: ChatTurn | null; onExpand: () => void }) {
   const viewport = useRef<HTMLDivElement>(null);
   const [renderReady,setRenderReady]=useState(false);
   const [poses,setPoses]=useState<Record<string,Pose>>(()=>Object.fromEntries(world.npcs.map(n=>[n.id,poseAt(stillAt(n.position),0)])));
@@ -21,7 +21,7 @@ export default function TownScene({ diagnostics=false, world, selected, onSelect
   const {player,pose:heroPose}=usePlayer(viewport,controlsBlocked,renderReady,p=>{
     const target=interactionTarget(p,world.npcs,positions);if(!target)return p;
     if(target.kind==="portal")return enterPortal(p,target.id);
-    if(target.kind==="notice"){onPublicHistory();return p;}
+    if(target.kind==="notice"){onNotice();return p;}
     onTalk(target.id);const dx=target.position.x-p.position.x,dy=target.position.y-p.position.y;
     return {...p,facing:Math.abs(dx)>Math.abs(dy)?(dx>0?"east":"west"):(dy>0?"south":"north")};
   });
