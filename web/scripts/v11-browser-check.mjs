@@ -1,0 +1,53 @@
+import assert from 'node:assert/strict';
+import {spawn} from 'node:child_process';
+import {randomUUID} from 'node:crypto';
+import {mkdir,writeFile,rename} from 'node:fs/promises';
+import {createWriteStream} from 'node:fs';
+import {createServer} from 'node:http';
+import path from 'node:path';
+process.env.PLAYWRIGHT_BROWSERS_PATH=path.resolve('.browsers');
+const {chromium,expect}=await import('@playwright/test');
+const {database}=await import('../src/lib/store.ts');
+const {createWorld,populateResidents}=await import('../src/lib/world.ts');
+const url=new URL(process.env.DATABASE_URL||'');assert.equal(url.hostname,'127.0.0.1');assert.equal(url.port,'55488');assert.equal(url.pathname,'/ai_town_mvp_test');
+const stage=process.env.V11_STAGE||'memory',dir=`evidence/v11/${stage}-browser`,id=`v11-${randomUUID()}`,base='http://127.0.0.1:3126';
+await mkdir(dir,{recursive:true});const log=createWriteStream(`${dir}/server.log`);let server,browser,a,b,p,calls=0;const checks=[],errors=[],contexts=[];
+const delay=ms=>new Promise(r=>setTimeout(r,ms));
+let mode='normal';
+const model=createServer(async(req,res)=>{let raw='';for await(const chunk of req)raw+=chunk;calls++;
+ const body=JSON.parse(raw);contexts.push(body.messages);
+ if(mode==='timeout'){setTimeout(()=>res.end('{}'),4000).unref();return;}
+ if(mode==='failure'){res.writeHead(503);res.end('{}');return;}
+ const facts=JSON.parse(body.messages[0].content.split('世界事实：\n')[1]),m=facts.playerAcquaintance;
+ const reply=m?.meetings?`记得${m.name?'，'+m.name:''}，第${Math.floor(m.first.minute/1440)+1}天我们聊过。`:'我们还没见过，你愿意介绍一下吗？';
+ res.setHeader('content-type','application/json');res.end(JSON.stringify({choices:[{message:{content:reply}}]}));
+});
+await new Promise(r=>model.listen(3196,'127.0.0.1',r));
+async function start(){server=spawn(process.execPath,['node_modules/next/dist/bin/next','start','--hostname','127.0.0.1','--port','3126'],{windowsHide:true,stdio:['ignore','pipe','pipe'],env:{...process.env,WORLD_ID:id,PUBLIC_DEMO:'false',AI_ENABLED:'true',NPC_AI_ENABLED:'false',AI_API_KEY:'local-test-only',AI_BASE_URL:'http://127.0.0.1:3196/v1',AI_MODEL:'mock',AI_TEST_MODE:'true',AI_TIMEOUT_MS:'600',AI_CALLS_PER_DAY:'20',CHAT_REQUESTS_PER_MINUTE:'120'}});server.stdout.pipe(log,{end:false});server.stderr.pipe(log,{end:false});for(let i=0;i<100;i++){try{if((await fetch(base+'/api/world')).ok)return;}catch{}await delay(100);}throw Error('server timeout');}
+async function stop(){if(server&&server.exitCode===null&&!server.signalCode)await new Promise(r=>{server.once('exit',r);server.kill();});}
+async function send(message){await p.locator('textarea').fill(message);const result=p.waitForResponse(r=>r.url().endsWith('/aning/chat')&&r.request().method()==='POST');await p.getByRole('button',{name:'发送消息',exact:true}).click();const r=await result;assert.equal(r.status(),200);const turn=await r.json();await expect(p.locator('textarea')).toHaveValue('');return turn;}
+const get=async()=>await(await fetch(base+'/api/world')).json();
+try{
+ const seed=populateResidents(createWorld());for(const n of seed.npcs)Object.assign(n,{hunger:20,energy:85,mood:95});seed.run={running:false,nextTickAt:null};
+ await database().query('INSERT INTO town_worlds(id,revision,payload) VALUES($1,$2,$3)',[id,seed.revision,JSON.stringify(seed)]);
+ await start();browser=await chromium.launch({headless:true});a=await browser.newContext({viewport:{width:1440,height:900},recordVideo:{dir,size:{width:1440,height:900}}});
+ await a.addInitScript(()=>{if(!sessionStorage.getItem('morning-town:player:v1'))sessionStorage.setItem('morning-town:player:v1',JSON.stringify({version:1,sceneId:'town',position:{x:524,y:418},facing:'north'}));});
+ p=await a.newPage();p.on('pageerror',e=>errors.push(e.message));await p.goto(base);await expect(p.getByTestId('scene-canvas')).toHaveAttribute('data-ready','true');
+ await p.screenshot({path:`${dir}/01-town.png`,fullPage:true});
+ await p.getByTestId('scene-viewport').focus();await p.keyboard.press('e');await expect(p.getByTestId('scene-composer')).toContainText('阿宁');
+ assert.match((await send('你还记得我吗')).reply,/还没见过/);
+ await send('我叫小舟');assert.match((await send('你还记得我吗')).reply,/小舟/);
+ await p.screenshot({path:`${dir}/02-recognition.png`,fullPage:true});
+ await p.getByRole('button',{name:'查看历史',exact:true}).click();await p.screenshot({path:`${dir}/03-history.png`,fullPage:true});await p.getByRole('button',{name:'关闭历史',exact:true}).click();
+ b=await browser.newContext();await b.request.get(base+'/api/npcs/aning/chat');assert.deepEqual((await(await b.request.get(base+'/api/npcs/aning/chat')).json()).turns,[]);
+ const outsider=await b.request.post(base+'/api/npcs/aning/chat',{headers:{origin:base},data:{message:'你还记得我吗',visitorId:'a'.repeat(64)}});assert.match((await outsider.json()).reply,/还没见过/);
+ const before=await get();await stop();await start();assert.deepEqual(await get(),before);await p.reload();await expect(p.getByTestId('scene-canvas')).toHaveAttribute('data-ready','true');await p.getByTestId('scene-viewport').focus();await p.getByRole('button',{name:'靠近后与阿宁对话',exact:true}).click();await expect(p.getByTestId('scene-composer')).toBeVisible();
+ assert.match((await send('你还记得我吗')).reply,/小舟/);checks.push('first/repeat/refresh/backend restart real browser private recognition; second cookie cannot read or impersonate');
+ for(const testMode of ['failure','timeout']){mode=testMode;const t=await send('你还记得我吗');assert.equal(t.source,'fallback');assert.match(t.reply,/小舟/);assert.equal(t.reason,testMode==='failure'?'service_error':'timeout');}mode='normal';
+ await p.screenshot({path:`${dir}/04-fallback.png`,fullPage:true});checks.push('model 503/timeout preserve truthful private memory; no external model');
+ assert.deepEqual(await get(),before);assert.equal(errors.length,0);assert.ok(contexts.some(ms=>ms[0].content.includes('"name":"小舟"')));
+ await writeFile(`${dir}/result.json`,JSON.stringify({id,checks,calls,externalCalls:0,errors},null,2));
+ const video=p.video();await a.close();a=null;await rename(await video.path(),`${dir}/journey.webm`);console.log(JSON.stringify({id,checks,calls}));
+}catch(error){await p?.screenshot({path:`${dir}/failure.png`,fullPage:true});throw error;}finally{await a?.close();await b?.close();await browser?.close();await stop();model.closeAllConnections();await new Promise(r=>model.close(r));log.end();await database().end();}
+
+

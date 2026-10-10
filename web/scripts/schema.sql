@@ -3,6 +3,8 @@ CREATE TABLE IF NOT EXISTS town_worlds (
     payload jsonb NOT NULL, updated_at timestamptz NOT NULL DEFAULT now()
   );
 
+-- Applied below after the private table exists; no world or chat reset.
+
 CREATE TABLE IF NOT EXISTS town_chats (
     world_id text NOT NULL REFERENCES town_worlds(id), npc_id text NOT NULL,
     turns jsonb NOT NULL DEFAULT '[]', PRIMARY KEY(world_id, npc_id),
@@ -20,3 +22,5 @@ CREATE TABLE IF NOT EXISTS town_private_chats (
     updated_at timestamptz NOT NULL DEFAULT now(), PRIMARY KEY(world_id,npc_id,visitor_id),
     CHECK (jsonb_typeof(turns) = 'array' AND jsonb_array_length(turns) <= 20)
   );
+
+ALTER TABLE town_private_chats ADD COLUMN IF NOT EXISTS player_memory jsonb;

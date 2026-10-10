@@ -4,6 +4,7 @@ import { database, readWorld, StoreError, worldId } from "./store";
 import { buildMessages, fallbackReply } from "./chat-context";
 import { modelReply } from "./chat-model";
 import { HISTORY_TURNS, MAX_MESSAGE, type ChatTurn } from "./chat-types";
+import {playerMemory,rememberPlayer} from "./player-memory";
 
 export function validateMessage(value: unknown): string {
   if (typeof value !== "string" || !value.trim() || value.length > MAX_MESSAGE || /[\u0000-\u0008\u000B\u000C\u000E-\u001F]/.test(value)) throw new StoreError(400, `消息必须为 1–${MAX_MESSAGE} 个字符的文本`);
@@ -28,14 +29,15 @@ export async function chat(npcId: string, input: unknown, visitorId: string, id 
     const lock = await client.query("SELECT pg_try_advisory_lock(hashtext($1),hashtext($2)) AS locked",[id,npcId]);
     locked = lock.rows[0].locked;
     if (!locked) throw new StoreError(409,"这位居民正在回复，请稍后重新打开对话查看记录。");
-    const result = await client.query("SELECT turns FROM town_private_chats WHERE world_id=$1 AND npc_id=$2 AND visitor_id=$3",[id,npcId,visitorId]);
+    const result = await client.query("SELECT turns,player_memory FROM town_private_chats WHERE world_id=$1 AND npc_id=$2 AND visitor_id=$3",[id,npcId,visitorId]);
     const history: ChatTurn[] = result.rows[0]?.turns || [];
+    const memory=playerMemory(result.rows[0]?.player_memory,history);
     await requireChatSlot(id);
-    const reply = await modelReply(buildMessages(npc,world,history,message), () => fallbackReply(npc,world,message,history), undefined, undefined, undefined, () => reserveChatQuota(id,"model"));
+    const reply = await modelReply(buildMessages(npc,world,history,message,memory), () => fallbackReply(npc,world,message,history,memory), undefined, undefined, undefined, () => reserveChatQuota(id,"model"));
     const turn: ChatTurn = {...reply,id:randomUUID(),message,worldRevision:world.revision,minute:world.minute,createdAt:new Date().toISOString()};
     const turns = [...history,turn].slice(-HISTORY_TURNS);
     // One atomic write; never updates town_worlds, even if it advanced during the request.
-    await client.query("INSERT INTO town_private_chats(world_id,npc_id,visitor_id,turns) VALUES($1,$2,$3,$4) ON CONFLICT(world_id,npc_id,visitor_id) DO UPDATE SET turns=EXCLUDED.turns,updated_at=now()",[id,npcId,visitorId,JSON.stringify(turns)]);
+    await client.query("INSERT INTO town_private_chats(world_id,npc_id,visitor_id,turns,player_memory) VALUES($1,$2,$3,$4,$5) ON CONFLICT(world_id,npc_id,visitor_id) DO UPDATE SET turns=EXCLUDED.turns,player_memory=EXCLUDED.player_memory,updated_at=now()",[id,npcId,visitorId,JSON.stringify(turns),JSON.stringify(rememberPlayer(memory,turn))]);
     return turn;
   } finally {
     try { if(locked) await client.query("SELECT pg_advisory_unlock(hashtext($1),hashtext($2))",[id,npcId]); }
