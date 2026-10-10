@@ -1,6 +1,8 @@
+import {meetingName} from './meeting-places';
+import {GOAL_RECIPES} from './goal-plan';
 import {invitationIntent,type Appointment} from "./appointments";
 import type {ChatReply,ChatTurn} from "./chat-types";
-import type {Npc,World} from "./world";
+import type {Npc,World,LocationId} from "./world";
 
 export function recallRequest(message:string){
  const absolute=/第\s*(\d+)\s*天/.exec(message);
@@ -9,8 +11,8 @@ export function recallRequest(message:string){
  return {day:day===null?null:Number.isSafeInteger(day)&&day>0&&day<=2147483647?day:-1,relative,
   recalling:/记得|回忆|昨天|昨日|前天|之前|经历|当时|说了什么|为什么来|第\s*\d+\s*天/.test(message)};
 }
-export type InvitationSource={appointment:Appointment;confirmation:Pick<ChatTurn,"id"|"message"|"minute"|"worldRevision">&{confirmation?:{turn:ChatTurn};meetingEvidence?:{minute:number}}};
-export type PlayerFact={sourceTable:"town_invitations";sourceId:string;turnId:string;kind:"proposed"|"invited"|"arrived"|"met"|"missed"|"cancelled"|"failed"|"refused"|"deferred";minute:number;result:string;target:"cafe"};
+export type InvitationSource={appointment:Appointment;confirmation:Pick<ChatTurn,"id"|"message"|"minute"|"worldRevision"|"meetingIntent">&{confirmation?:{turn:ChatTurn};meetingEvidence?:{minute:number}}};
+export type PlayerFact={sourceTable:"town_invitations";sourceId:string;turnId:string;kind:"proposed"|"invited"|"arrived"|"met"|"missed"|"cancelled"|"failed"|"refused"|"deferred"|"completed";minute:number;result:string;target:LocationId};
 export type PlayerRecall={requestedDay:number|null;events:PlayerFact[]};
 // Sources are already scoped to world + NPC + signed visitor by the SQL reader.
 // A cancelled-request receipt is not evidence that a second invitation was accepted.
@@ -19,19 +21,20 @@ export function retrievePlayerFacts(sources:InvitationSource[],message:string,mi
  const events:PlayerFact[]=[];
  for(const {appointment:a,confirmation:c} of sources){
   if(c.minute!==a.createdMinute||!c.id||!a.id)continue;
-  const intent=invitationIntent(c.message,npcName);
+  const intent=c.meetingIntent?(['cancel','decline'].includes(c.meetingIntent.operation)?'cancel':'negotiate'):invitationIntent(c.message,npcName);
   const push=(kind:PlayerFact["kind"],time:number,result:string,turnId=c.id)=>{
    if(!Number.isSafeInteger(time)||time<c.minute||time>minute)return;
    if(requestedDay!==null&&Math.floor(time/1440)+1!==requestedDay)return;
-   events.push({sourceTable:"town_invitations",sourceId:a.id,turnId,kind,minute:time,result,target:"cafe"});
+   events.push({sourceTable:"town_invitations",sourceId:a.id,turnId,kind,minute:time,result:a.target==='cafe'?result:result.replaceAll('麦香咖啡馆',meetingName(a.target)).replaceAll('咖啡馆',meetingName(a.target)).replaceAll('喝咖啡','进行约好的行动'),target:a.target});
   };
   if(intent==="cancel"){if(a.status==="cancelled")push("cancelled",a.updatedMinute,"这位访客取消会合");continue;}
-  if(intent!=="invite"&&intent!=="propose")continue;
+  if(!["invite","propose","negotiate","schedule"].includes(intent??""))continue;
   if(a.status==="refused"||a.status==="deferred"){push(a.status,c.minute,a.reason);continue;}
-  if(intent==="propose")push("proposed",c.minute,"这位访客提议喝咖啡，单凭提议不算已确认");
-  if(intent==="invite"||a.confirmedMinute!==undefined&&c.confirmation?.turn.minute===a.confirmedMinute)push("invited",a.confirmedMinute??c.minute,"这位访客邀请NPC去麦香咖啡馆，后台确认接受",c.confirmation?.turn.id??c.id);
+  if(intent==="propose"||intent==="negotiate")push("proposed",c.minute,a.goal?`这位访客提出${GOAL_RECIPES[a.goal].label}，单凭提议不算确认`:"这位访客提议喝咖啡，单凭提议不算已确认");
+  if(intent==="invite"||intent==="schedule"&&a.confirmedMinute===c.minute||c.meetingIntent&&a.confirmedMinute===c.minute||a.confirmedMinute!==undefined&&c.confirmation?.turn.minute===a.confirmedMinute)push("invited",a.confirmedMinute??c.minute,a.goal?`这位访客提出在${meetingName(a.target)}${GOAL_RECIPES[a.goal].label}，后台已确认`:"这位访客邀请NPC去麦香咖啡馆，后台确认接受",c.confirmation?.turn.id??c.id);
   if(a.arrivedMinute!==undefined)push("arrived",a.arrivedMinute,"NPC已通过合法入口赴约到达；不证明玩家也到场");
   if(a.status==="met"&&a.metMinute!==undefined&&c.meetingEvidence?.minute===a.metMinute)push("met",a.metMinute,"这位访客在咖啡馆发起近距离交流，后台校验同场景合法位置及距离，双方实际会面");
+  if(a.status==='completed'&&a.plan&&a.plan.cursor===a.plan.steps.length&&a.plan.evidence.length===a.plan.steps.length-1)push('completed',a.updatedMinute,`在${meetingName(a.target)}完成${GOAL_RECIPES[a.goal??'meet'].label}${a.plan.evidence.some(e=>e.kind==='help')?'；协助不等于整份工作完成':''}，实际动作来源：${a.plan.evidence.map(e=>e.actionId).join('、')}`);
   if(a.status==="missed")push("missed",a.updatedMinute,a.reason);
   if(a.status==="cancelled"||a.status==="failed")push(a.status,a.updatedMinute,a.reason);
  }
@@ -40,6 +43,9 @@ export function retrievePlayerFacts(sources:InvitationSource[],message:string,mi
 }
 
 export function recallFallback(recall:PlayerRecall):string|undefined {
+ const completed=recall.events.find(e=>e.kind==='completed');if(completed)return completed.result;
+ const nonCafe=recall.events.find(e=>e.target!=='cafe'&&['met','arrived','invited','cancelled','failed'].includes(e.kind));
+ if(nonCafe)return `记得，在${meetingName(nonCafe.target)}那次安排：${nonCafe.result}。`;
  if(recall.events.some(e=>e.kind==="met"))return "记得，你约我喝咖啡，我们后来确实见面了。";
  if(recall.events.some(e=>e.kind==="missed"))return "那次我到咖啡馆等过，但没能和你碰面。";
  const invitation=recall.events.find(e=>e.kind==="invited"),arrival=recall.events.find(e=>e.kind==="arrived");
@@ -67,7 +73,7 @@ export function checkChatFacts(reply:ChatReply,npc:Npc,world:World,recall:Player
  const invitation=recall.events.find(e=>e.kind==="invited");
  if(invitation&&/只(?:是)?(?:简单)?(?:打过招呼|聊过天|闲聊)/.test(reply.reply)){
   const arrived=recall.events.some(e=>e.kind==="arrived"&&e.sourceId===invitation.sourceId);
-  return {...reply,reply:arrived?"是你约我去咖啡馆的，我确实按约到过。":"你曾约我去咖啡馆，我记得这次邀请。",source:"fallback",reason:"fact_conflict",factCheck:{code:"denied_invitation_history",originalReply:reply.reply,sourceIds:[invitation.sourceId]}};
+  return {...reply,reply:arrived?`是你约我去${meetingName(invitation.target)}的，我确实按约到过。`:`你曾约我去${meetingName(invitation.target)}，我记得这次邀请。`,source:"fallback",reason:"fact_conflict",factCheck:{code:"denied_invitation_history",originalReply:reply.reply,sourceIds:[invitation.sourceId]}};
  }
  return reply;
 }

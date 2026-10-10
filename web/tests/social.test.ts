@@ -1,11 +1,15 @@
 import {describe,it,expect} from "vitest";
 import {createWorld,populateResidents,advanceWorld} from "../src/lib/world";
 import {canTalk,beginSocial,advanceConversations} from "../src/lib/social";
-import {socialReplies} from "../src/lib/social-service";
+import {socialReplies,npcAIEnabled} from "../src/lib/social-service";
 import {modelReply,type AIConfig} from "../src/lib/chat-model";
 function meeting(){const w=populateResidents(createWorld());w.npcs=w.npcs.slice(0,2);for(const n of w.npcs)Object.assign(n,{hunger:0,energy:85,mood:50});return w;}
 const config:AIConfig={enabled:true,key:"local-test-only",baseUrl:"http://127.0.0.1:9999/v1",model:"mock",timeoutMs:100,testMode:true};
 describe("bounded public social dialogue",()=>{
+  it('enables the public model by default while respecting explicit disable and invalid values',()=>{
+    const prior=process.env.NPC_AI_ENABLED;delete process.env.NPC_AI_ENABLED;
+    try{expect(npcAIEnabled()).toBe(true);expect(npcAIEnabled('true')).toBe(true);expect(npcAIEnabled('false')).toBe(false);expect(npcAIEnabled('invalid')).toBe(false);}finally{if(prior===undefined)delete process.env.NPC_AI_ENABLED;else process.env.NPC_AI_ENABLED=prior;}
+  });
   it("requires real proximity, availability and motive; one finite conversation per cooldown",()=>{
     const w=meeting(),[a,b]=w.npcs;expect(canTalk(a,b,w)).toBe(true);
     expect(canTalk(a,{...b,sceneId:"home_interior"},w)).toBe(false);expect(canTalk(a,{...b,position:{x:1000,y:500}},w)).toBe(false);

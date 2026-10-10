@@ -2,8 +2,9 @@ import { requireChatSlot, reserveChatQuota } from "./chat-limits";
 import { randomUUID } from "node:crypto";
 import { database, readWorld, StoreError, worldId } from "./store";
 import { buildMessages, fallbackReply } from "./chat-context";
-import { modelReply } from "./chat-model";
-import { HISTORY_TURNS, MAX_MESSAGE, type ChatTurn } from "./chat-types";
+import { modelReply,aiConfig } from "./chat-model";
+import {naturalChat} from './natural-chat';
+import { HISTORY_TURNS, MAX_MESSAGE, type ChatTurn, type ChatReply } from "./chat-types";
 import {playerMemory,rememberPlayer,introducedName,asksPlayerName,recognitionReply} from "./player-memory";
 import {invitationIntent,appointmentReply} from "./appointments";
 import {confirmInvitation,privateConversationState} from "./invitation-store";
@@ -38,22 +39,40 @@ export async function chat(npcId: string, input: unknown, visitorId: string, id 
     const history: ChatTurn[] = result.rows[0]?.turns || [];
     const memory=playerMemory(result.rows[0]?.player_memory,history);
     await requireChatSlot(id);
+    const snapshot=await privateConversationState(client,id,npcId,visitorId,message);
+    const config=aiConfig();let understandingFailure:ChatReply|undefined;
+    if(config.enabled&&config.key.trim()&&config.baseUrl.trim()&&config.model.trim()){
+      const result=await naturalChat(client,id,npcId,visitorId,message,requestId as string??randomUUID(),history,snapshot);
+      if('turn' in result)return result.turn;
+      understandingFailure=result.failed;
+    }
+    // Finite legacy phrases are now only the no-model / failed-model fallback.
     const intent=invitationIntent(message,npc.name);
-    if(intent==="invite"||intent==="cancel"||intent==="propose")return await confirmInvitation(client,id,npcId,visitorId,message,requestId as string??randomUUID(),intent);
+    const cafeContext=snapshot.appointments.some(a=>["proposed","accepted","waiting","travelling","arrived"].includes(a.status));
+    const explicitCafe=/(?:麦香)?咖啡馆/.test(message);
+    if(intent==="invite"||intent==="cancel"||intent==="propose"||intent==="negotiate"||intent==="schedule"&&(explicitCafe||cafeContext))return await confirmInvitation(client,id,npcId,visitorId,message,requestId as string??randomUUID(),intent);
     if(intent==="confirm"){
-      const pending=(await privateConversationState(client,id,npcId,visitorId)).appointments.some(a=>a.status==="proposed");
-      const repeated=requestId&&(await client.query("SELECT 1 FROM town_invitations WHERE world_id=$1 AND npc_id=$2 AND visitor_id=$3 AND response->'confirmation'->>'requestId'=$4",[id,npcId,visitorId,requestId])).rows.length>0;
+      const pending=cafeContext;
+      const repeated=requestId&&(await client.query("SELECT 1 FROM town_invitations WHERE world_id=$1 AND npc_id=$2 AND visitor_id=$3 AND (response->'confirmation'->>'requestId'=$4 OR response->'receipts' @> $5::jsonb)",[id,npcId,visitorId,requestId,JSON.stringify([{requestId}])])).rows.length>0;
       if(pending||repeated)return await confirmInvitation(client,id,npcId,visitorId,message,requestId as string??randomUUID(),intent);
     }
-    const snapshot=await privateConversationState(client,id,npcId,visitorId,message);
     const currentNpc=snapshot.world.npcs.find(n=>n.id===npcId)!;
     const turnId=randomUUID(),newName=introducedName(message);
     const contextMemory=newName?rememberPlayer(memory,{id:turnId,message,reply:"",source:"fallback",minute:snapshot.world.minute,worldRevision:snapshot.world.revision,createdAt:new Date().toISOString()}):memory;
     const publicRecall=gatheringRecall(currentNpc,snapshot.world,message);
     const recalling=!publicRecall&&recallRequest(message).recalling;
-    const rawReply = intent==="status"&&!recalling||intent==="ambiguous"?{reply:intent==="status"?appointmentReply(snapshot.appointments[0]):"你是想约我去麦香咖啡馆见面吗？",source:"fallback" as const,reason:"controlled_action" as const}:
+    const query=recallRequest(message);
+    const currentStatus=intent==="status"&&query.day===null&&query.relative===null;
+    const clarify=intent==="clarify"||intent==="schedule"||intent==="ambiguous";
+    const statusReply=recalling&&snapshot.appointments[0]?.status==="met"?recallFallback(snapshot.recall)??appointmentReply(snapshot.appointments[0]):appointmentReply(snapshot.appointments[0]);
+    const clarification=snapshot.appointments[0]?appointmentReply(snapshot.appointments[0]):intent==="schedule"||intent==="ambiguous"?"你是想约我在麦香咖啡馆见面吗？请说清地点和时间。":"你想问刚才哪一件事？可以再说具体一点吗？";
+    const rawReply = currentStatus||clarify?{reply:currentStatus?statusReply:clarification,source:"fallback" as const,reason:"controlled_action" as const}:understandingFailure?{...understandingFailure,reply:(asksPlayerName(message)||/认识我|记得我/.test(message)?recognitionReply(message,contextMemory):undefined)??(recalling?recallFallback(snapshot.recall):undefined)??fallbackReply(currentNpc,snapshot.world,message,history,contextMemory)}:
       await modelReply(buildMessages(currentNpc,snapshot.world,history,message,contextMemory,snapshot.appointments,snapshot.recall), () => (asksPlayerName(message)||(/认识我|记得我/.test(message)&&!/约定|邀请|会合|咖啡/.test(message))?recognitionReply(message,contextMemory):undefined)??(recalling?recallFallback(snapshot.recall):undefined)??fallbackReply(currentNpc,snapshot.world,message,history,contextMemory), undefined, undefined, undefined, () => reserveChatQuota(id,"model"));
     let reply=checkChatFacts(rawReply,currentNpc,snapshot.world,snapshot.recall);
+    // Unsupported wording must not gain execution authority through an invented model promise.
+    if(rawReply.source==="ai"&&!recalling&&intent===null&&/(?:约|邀请|一起|见面|咖啡馆)/.test(message)&&/(?:说好|答应|约好|(?:广场|咖啡馆).*见|(?:等会|待会|马上|现在就).*(?:去找你|来找你|出发))/.test(rawReply.reply)){
+      reply={...rawReply,reply:snapshot.appointments[0]?appointmentReply(snapshot.appointments[0]):"还没有确认约定，请说清咖啡馆和见面时间。",source:"fallback",reason:"fact_conflict",factCheck:{code:"unconfirmed_commitment",originalReply:rawReply.reply,sourceIds:snapshot.appointments.map(a=>a.id)}};
+    }
     if(publicRecall&&rawReply.source==="ai"&&!gatheringKnowledge(snapshot.world,currentNpc,message).firsthandFacts.length&&/我.*(?:参加了|参加过|去了|去过|在场|到场)|我们.*(?:聚会|聊过)/.test(rawReply.reply))reply={...rawReply,reply:publicRecall,source:"fallback",reason:"fact_conflict",factCheck:{code:"public_attendance",originalReply:rawReply.reply,sourceIds:[]}};
     // A model cannot erase or invent the private explicit name fact.
     if(rawReply.source==="ai"&&(asksPlayerName(message)||!!newName)&&(!contextMemory.name||!rawReply.reply.includes(contextMemory.name)||/不知道|不记得|没告诉/.test(rawReply.reply)))reply={...rawReply,reply:recognitionReply(message,contextMemory)!,source:"fallback",reason:"fact_conflict",factCheck:{code:"player_name",originalReply:rawReply.reply,sourceIds:contextMemory.nameSource?[contextMemory.nameSource]:[]}};

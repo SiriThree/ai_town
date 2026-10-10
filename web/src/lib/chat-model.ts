@@ -7,7 +7,7 @@ export function aiConfig(): AIConfig {
 }
 const modelSlots=globalThis as typeof globalThis & {townActiveModels?:number};
 type Diagnostic = { source: "ai" | "fallback"; reason?: FallbackReason; elapsedMs: number; status?: number };
-export async function modelReply(messages: ModelMessage[], fallback: () => string, config = aiConfig(), transport: typeof fetch = fetch, diagnose: (event: Diagnostic) => void = event => console.info("npc_chat", event), reserveAttempt: () => Promise<boolean> = async () => true): Promise<ChatReply> {
+export async function modelReply(messages: ModelMessage[], fallback: () => string, config = aiConfig(), transport: typeof fetch = fetch, diagnose: (event: Diagnostic) => void = event => console.info("npc_chat", event), reserveAttempt: () => Promise<boolean> = async () => true, jsonMode = false): Promise<ChatReply> {
   const start = Date.now();
   const degrade = (reason: FallbackReason, status?: number): ChatReply => {
     diagnose({ source: "fallback", reason, elapsedMs: Date.now() - start, ...(status ? {status} : {}) });
@@ -30,7 +30,7 @@ export async function modelReply(messages: ModelMessage[], fallback: () => strin
   try {
     const response = await transport(url, { method: "POST", redirect: "error", signal: controller.signal,
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${config.key}` },
-      body: JSON.stringify({ model: config.model, messages, stream: false, max_completion_tokens: 400 }),
+      body: JSON.stringify({ model: config.model, messages, stream: false, max_completion_tokens: 400, ...(jsonMode?{response_format:{type:"json_object"}}:{}) }),
     });
     if (!response.ok) { await response.body?.cancel(); return degrade("service_error",response.status); }
     let data;

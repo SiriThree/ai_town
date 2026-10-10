@@ -1,5 +1,6 @@
 "use client";
-import {bubbleText} from "../lib/dialogue-text";
+import {bubbleText,bubbleSize} from "../lib/dialogue-text";
+import {lifeCandidates} from '../lib/life-expression';
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import type { Application,Container } from "pixi.js";
 import type { ResidentArt } from "./scene-art";
@@ -54,8 +55,16 @@ export default function TownScene({ diagnostics=false, world, selected, onSelect
   },[]);
   const transform=sceneTransform(size,camera,sceneId);
   const speaker=world.npcs.find(n=>n.id===selected);
-  const bubble=speaker && residentScene(speaker)===sceneId && speech ? bubblePlacement(poses[speaker.id]?.position ?? speaker.position,size,camera,{width:260,height:diagnostics?164:bubbleText(speech.reply).length<=16?76:100},sceneId) : null;
+  const bubble=speaker && residentScene(speaker)===sceneId && speech ? bubblePlacement(poses[speaker.id]?.position ?? speaker.position,size,camera,diagnostics?{width:260,height:164}:bubbleSize(speech.reply,speaker.name),sceneId) : null;
   const publicConversation=[...(world.conversations??[])].reverse().find(c=>c.sceneId===sceneId&&c.timeline&&!c.timeline.completed);
+  const [expiredLife,setExpiredLife]=useState<string[]>([]);
+  const ambient=lifeCandidates(world,sceneId,!!bubble||!!publicConversation).filter(e=>!expiredLife.includes(e.id)).map(e=>({e,place:bubblePlacement(poses[e.npcId]?.position??world.npcs.find(n=>n.id===e.npcId)!.position,size,camera,bubbleSize(e.text,world.npcs.find(n=>n.id===e.npcId)!.name+(e.kind==='thought'?' · 心想':'')),sceneId)})).find(item=>item.place);
+  const ambientId=ambient?.e.id;
+  useEffect(()=>{
+    if(!ambientId)return;
+    const timer=setTimeout(()=>setExpiredLife(ids=>[...ids,ambientId].slice(-120)),6000);
+    return ()=>clearTimeout(timer);
+  },[ambientId]);
   const baseScale=sceneTransform(size,{zoom:1,x:0,y:0},sceneId).scale;
   function zoom(amount:number){setCamera(c=>boundedCamera({...c,zoom:c.zoom+(size.width>=600?Math.sign(amount)*.5/baseScale:amount)},size,sceneId));}
 
@@ -162,6 +171,9 @@ export default function TownScene({ diagnostics=false, world, selected, onSelect
       {sceneId==="town"&&target?.kind==="notice"&&<span className="notice-focus" style={{left:NOTICE_BOARD.x,top:NOTICE_BOARD.y}} aria-hidden>◇</span>}
       {SCENES[sceneId].portals.map(p=><span key={p.id} className={`door-marker ${target?.kind==="portal"&&target.id===p.id?"near":""}`} style={{left:p.position.x,top:p.position.y}} aria-hidden>◇</span>)}
     </div>
+    {ambient?.place&&<aside className={`speech-bubble life-bubble ${ambient.e.kind}`} data-testid="life-bubble" data-expression={ambient.e.id} data-kind={ambient.e.kind} data-npc={ambient.e.npcId} aria-label={ambient.e.kind==='thought'?'内心观察':'自言自语'} style={{left:ambient.place.left,top:ambient.place.top,width:ambient.place.width,height:ambient.place.height,'--tail-x':`${ambient.place.tail}px`} as CSSProperties}>
+      <div className="speech-content"><div className="reply-heading"><strong>{world.npcs.find(n=>n.id===ambient.e.npcId)?.name}{ambient.e.kind==='thought'?' · 心想':''}</strong></div><p>{bubbleText(ambient.e.text)}</p></div><i className="bubble-tail" aria-hidden />
+    </aside>}
     {error && <p role="alert" className="scene-error">{error}</p>}
     {sceneId!=="town"&&<div className="map-caption"><span>{SCENES[sceneId].name}</span>{diagnostics&&<small>{INTERIORS[sceneId].caption}</small>}</div>}
     <div className="camera-tools" aria-label="地图镜头"><button aria-label="缩小地图" disabled={camera.zoom<=.25/baseScale} onClick={()=>zoom(-.25)}>−</button><output aria-label="地图缩放">{Math.round(transform.scale/baseScale*100)}%</output><button aria-label="放大地图" disabled={camera.zoom>=2.5} onClick={()=>zoom(.25)}>＋</button><button onClick={()=>setCamera(overviewCamera(size,sceneId))}>全景</button><button onClick={()=>setCamera(sceneId==="town"?followPlayer(player.position,size,{zoom:1,x:0,y:0},sceneId):{zoom:1,x:0,y:0})}>复位</button></div>
@@ -171,7 +183,7 @@ export default function TownScene({ diagnostics=false, world, selected, onSelect
     </aside>}
     {!bubble&&publicConversation?.turns.filter((_,i)=>i===publicConversation.timeline?.turnIndex).map((turn)=>{
       const n=world.npcs.find(n=>n.id===turn.npcId&&n.sceneId===sceneId);if(!n)return null;
-      const place=bubblePlacement(poses[n.id]?.position??n.position,size,camera,{width:260,height:diagnostics?125:100},sceneId);if(!place)return null;
+      const place=bubblePlacement(poses[n.id]?.position??n.position,size,camera,diagnostics?{width:260,height:125}:bubbleSize(turn.reply,n.name),sceneId);if(!place)return null;
       const other=world.npcs.find(other=>other.id!==n.id&&publicConversation.participants.includes(other.id));
       const onLeft=(poses[n.id]?.position.x??n.position.x)<=(other?(poses[other.id]?.position.x??other.position.x):n.position.x);
       const left=Math.max(12,Math.min(size.width-place.width-12,place.left+(onLeft?-70:70)));

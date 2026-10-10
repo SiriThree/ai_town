@@ -5,6 +5,8 @@ import {reserveChatQuota} from "./chat-limits";
 import {buildMessages} from "./chat-context";
 import type {World} from "./world";
 import type {PublicConversation} from "./social";
+// Enabled by default; explicit false (or an invalid value) disables public model calls.
+export const npcAIEnabled=(value:string|undefined=process.env.NPC_AI_ENABLED)=>value===undefined||value==='true';
 export async function socialReplies(c:PublicConversation,w:World,config:AIConfig,transport:typeof fetch=fetch,reserve=async()=>true){
   const turns=[];
   for(let i=0;i<c.speakers.length;i++){
@@ -17,7 +19,7 @@ export async function socialReplies(c:PublicConversation,w:World,config:AIConfig
 }
 // Scheduled with Next's bounded after-response hook. Never holds a world lock over model I/O.
 export async function enrichSocial(id=worldId()){
-  if(process.env.NPC_AI_ENABLED!=="true")return;
+  if(!npcAIEnabled())return;
   let claimed:PublicConversation|undefined;
   try{
     const snapshot=await updateWorld(id,w=>{

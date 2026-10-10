@@ -47,6 +47,6 @@ export function bubblePlacement(point: Point, view: Viewport, camera: Camera, bu
   // Leave the desktop camera toolbar reachable when a resident reaches an upper corner.
   const topInset=view.width>=600?60:10;
   const height = Math.min(bubble.height, head - topInset - 10);
-  if (height < 66) return null;
+  if (height < 52) return null;
   return { left, top: head - height - 10, width, height, tail: foot.x - left };
 }

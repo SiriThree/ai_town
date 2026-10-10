@@ -11,4 +11,4 @@ export const FALLBACK_LABELS: Record<FallbackReason, string> = {
   timeout: "模型响应超时", network: "模型连接失败", service_error: "模型服务暂不可用", invalid_response: "模型回复无效",
 };
 export type ChatReply = { reply: string; source: "ai" | "fallback"; reason?: FallbackReason; testMode?: boolean; factCheck?:{code:string;originalReply:string;sourceIds:string[]} };
-export type ChatTurn = ChatReply & { id: string; message: string; worldRevision: number; minute: number; createdAt: string };
+export type ChatTurn = ChatReply & { id: string; message: string; worldRevision: number; minute: number; createdAt: string; requestId?:string; meetingIntent?:{operation:string}; semantic?:{interpretation:unknown;outcome?:unknown;expressionSource?:string} };

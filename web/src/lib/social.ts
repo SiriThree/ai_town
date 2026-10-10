@@ -19,12 +19,14 @@ export function advanceConversations(w:World){
   return held;
 }
 export function canTalk(a:Npc,b:Npc,w:World){
-  if([a,b].some(n=>n.appointment&&["accepted","waiting","travelling"].includes(n.appointment.status)))return false;
+  if([a,b].some(n=>n.appointment&&["accepted","waiting","travelling","arrived","executing"].includes(n.appointment.status)))return false;
   if(a.id===b.id||a.sceneId!==b.sceneId||Math.hypot(a.position.x-b.position.x,a.position.y-b.position.y)>100)return false;
   if([a,b].some(n=>activeConversation(w,n.id)|| (n.ongoing&&!["read","wait","socialize"].includes(n.ongoing.decision.action.kind)) || n.lastPath.length||n.energy<30||n.hunger>=65||/休息|制作|理货|整理|协助/.test(n.action)))return false;
   const sharedGathering=w.gatherings?.some(g=>g.status==="active"&&[a,b].every(n=>g.responses.some(r=>r.npcId===n.id&&r.status==="participated")));
-  if(!sharedGathering&&![a,b].some(n=>n.personality==="outgoing"&&n.mood<85)&&(relationFor(w,a.id,b.id)?.familiarity??0)<5)return false;
-  return !w.conversations?.some(c=>w.minute-c.minute<120&&c.participants.some(id=>id===a.id||id===b.id));
+  const familiar=(relationFor(w,a.id,b.id)?.familiarity??0)>=2;
+  const sharedWork=w.experiences?.facts.some(f=>f.kind==='work'&&[a,b].every(n=>f.participants.includes(n.id)));
+  if(!sharedGathering&&!sharedWork&&!familiar&&![a,b].some(n=>n.personality==="outgoing"&&n.mood<90))return false;
+  return !w.conversations?.some(c=>w.minute-c.minute<90&&c.participants.some(id=>id===a.id||id===b.id));
 }
 export function beginSocial(world:World){
   if(!world.rosterVersion)return;
@@ -39,9 +41,10 @@ export function beginSocial(world:World){
     const familiar=(relationFor(world,a.id,b.id)?.familiarity??0)>1;
     const sharedWork=world.experiences?.facts.some(f=>f.kind==="work"&&[a.id,b.id].every(id=>f.participants.includes(id)));
     const gathering=world.gatherings?.some(g=>g.status==="active"&&[a,b].every(n=>g.responses.some(r=>r.npcId===n.id&&r.status==="participated")));
-    const lines=[gathering?`${b.name}，在广场聚会见到你真好。`:sharedWork?`${b.name}，上次一起做事，多谢你帮忙。`:
-      `${b.name}，${familiar?"又见面了，最近过得怎么样？":"歇一会儿，聊聊今天的近况？"}`,
-      b.personality==="quiet"?"嗯，慢慢聊一会儿，我很愿意听。":"好呀，见到你真高兴！最近还顺利吗？"];
+    const index=Math.floor(world.minute/30)%3;
+    const open=familiar?['又碰到你啦，歇会儿？','今天过得怎么样？','走累了吗，聊两句吧？']:['歇一会儿，聊聊近况？','碰巧遇见你，今天好吗？','这里挺安静，聊两句？'];
+    const answer=b.personality==='quiet'?['嗯，慢慢聊一会儿，我很愿意听。','我倒喜欢这样安静待一会儿。','嗯，能停下来聊几句也不错。']:['好呀，见到你真高兴！最近还顺利吗？','来呀，正好歇歇脚，聊聊近况。','好啊，和邻居说说话很开心。'];
+    const lines=[gathering?`${b.name}，在广场聚会见到你真好。`:sharedWork?`${b.name}，上次一起做事，多谢你帮忙。`:`${b.name}，${open[index]}`,answer[index]];
     const c:PublicConversation={id,eventId:event.id,minute:world.minute,sceneId:a.sceneId,participants:[a.id,b.id],speakers:structuredClone([a,b]),turns:[a,b].map((n,i)=>({npcId:n.id,reply:lines[i],source:"fallback",reason:"disabled"})),modelState:"local",timeline:{turnIndex:0,elapsedMs:0,completed:false}};
     for(const n of [a,b]){delete n.ongoing;n.lastPath=[];n.action=`与${n.id===a.id?b.name:a.name}交谈 · 第1/2句`;const other=n.id===a.id?b:a;n.facing=other.position.x>n.position.x?"east":"west";}
     c.speakers=structuredClone([a,b]);

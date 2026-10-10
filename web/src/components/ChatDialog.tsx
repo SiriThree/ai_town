@@ -46,7 +46,7 @@ export default function SceneChat({ getPlayer,diagnostics=false,npc, available, 
   },[endpoint,npc.appointment?.status,npc.appointment?.id,loading]);
   useEffect(()=>{
     if(!available||!appointmentForMeeting(appointments)||appointmentForMeeting(appointments)!==npc.appointment?.id)return;
-    const presence=getPlayer();if(presence?.sceneId!=="cafe_interior")return;
+    const presence=getPlayer();if(!presence)return;
     let active=true;
     fetch(endpoint,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({interaction:"meet",presence}),signal:AbortSignal.timeout(10000)})
       .then(async r=>r.ok?r.json():null).then(data=>{if(active&&data?.meeting)setAppointments(list=>list.map(a=>a.id===data.meeting.id?data.meeting:a));}).catch(()=>{});
@@ -90,7 +90,7 @@ export default function SceneChat({ getPlayer,diagnostics=false,npc, available, 
     <div className="composer-heading"><div className="composer-name"><span className={`resident-dot ${npc.id}`} aria-hidden /><strong>{npc.name}</strong></div><nav aria-label="对话操作"><button onClick={onProfile}>居民档案</button><button onClick={()=>onHistory(!historyOpen)} aria-expanded={historyOpen}>查看历史</button><button aria-label="关闭对话" onClick={onClose}>告别 ×</button></nav></div>
     {historyOpen && <aside className="chat-history" aria-label={`${npc.name}的对话历史`}><div className="panel-heading"><strong>与{npc.name}的手记 · 最近 20 轮</strong><button aria-label="关闭历史" onClick={()=>onHistory(false)}>×</button></div><div className="chat-messages" ref={list}>
       {!turns.length && <p className="muted">还没有已保存的对话。</p>}
-      {turns.map(t=><article key={t.id} className="chat-turn" data-testid="chat-turn"><div className="chat-player"><small>你</small><p>{t.message}</p></div><div className="chat-npc"><div className="reply-heading"><strong>{npc.name}</strong>{diagnostics&&<span className={`source-badge ${t.source}`}>{t.source==="ai"?(t.testMode?"AI · 本地测试替身":"AI 回复"):`降级回复 · ${FALLBACK_LABELS[t.reason!] || "本地规则"}`}</span>}</div><p>{t.reply}</p><small className="reply-time">{worldTime(t.minute)}{diagnostics&&` · v${t.worldRevision} · ${t.id}`}</small></div></article>)}
+      {turns.map(t=><article key={t.id} className="chat-turn" data-testid="chat-turn"><div className="chat-player"><small>你</small><p>{t.message}</p></div><div className="chat-npc"><div className="reply-heading"><strong>{npc.name}</strong>{diagnostics&&<span className={`source-badge ${t.source}`}>{t.source==="ai"?(t.testMode?"AI · 本地测试替身":"AI 回复"):`降级回复 · ${FALLBACK_LABELS[t.reason!] || "本地规则"}`}</span>}</div><p>{t.reply}</p><small className="reply-time">{worldTime(t.minute)}{diagnostics&&` · v${t.worldRevision} · ${t.id}`}</small>{diagnostics&&t.semantic&&<details><summary>目标理解与后台结果</summary><pre>{JSON.stringify(t.semantic,null,2)}</pre></details>}</div></article>)}
     </div></aside>}
     <div className="composer-status" aria-live="polite" aria-busy={pending||loading}>
       {loading ? <p>正在翻开之前的对话…</p> : pending ? <p className="chat-wait" role="status">你：{draft.slice(0,60)}<span> · 已发送，{npc.name}正在想一想…</span></p> : latest ? <p className="player-preview" title={latest.message}><strong>你：</strong>{latest.message}</p> : <p>向{npc.name}打个招呼吧。</p>}
@@ -104,7 +104,7 @@ export default function SceneChat({ getPlayer,diagnostics=false,npc, available, 
       <button className="advance" type="submit" disabled={!available||pending||loading||!draft.trim()||!!error}>{pending?"等待回复…":"发送消息"}</button>
     </form>
     {meeting&&<p className="meeting-feedback" data-testid="meeting-feedback" aria-live="polite">{meeting}</p>}
-    {appointment?.status==="proposed"&&<button disabled={!available||pending||loading||!!error} onClick={()=>void send("确认这个时间")}>确认这个时间</button>}
+    {appointment?.status==="proposed"&&appointment.scheduledMinute!==undefined&&<button disabled={!available||pending||loading||!!error} onClick={()=>void send("确认这个时间")}>确认这个时间</button>}
     {diagnostics&&<div className="composer-hint"><small>{draft.length}/{MAX_MESSAGE} · Enter 发送 / Shift+Enter 换行</small><small>访客私聊 · 后台确认约定后才执行</small></div>}
   </section>;
 }
