@@ -1,7 +1,7 @@
 import {randomUUID} from "node:crypto";
 import {database,readWorld,StoreError} from "./store";
 import {assertWorld,restoreWorld} from "./world";
-import {activeGathering,validateNotice,type Gathering} from "./gatherings";
+import {activeGathering,validateNotice,notifyGathering,type Gathering} from "./gatherings";
 
 export async function notices(id:string,visitor:string){
  const w=await readWorld(id),owned=await database().query("SELECT id FROM town_notice_owners WHERE world_id=$1 AND visitor_id=$2",[id,visitor]);
@@ -26,6 +26,9 @@ export async function changeNotice(id:string,visitor:string,input:unknown){
    const recent=await c.query("SELECT 1 FROM town_notice_owners WHERE world_id=$1 AND visitor_id=$2 AND created_at>clock_timestamp()-interval '60 seconds' LIMIT 1",[id,visitor]);
    if(recent.rows.length)throw new StoreError(429,"刚刚发布过公告，请稍候一分钟再发布。");
    const a:Gathering={id:randomUUID(),worldId:id,kind:"gathering",...data,createdMinute:w.minute,endMinute:data.startMinute+60,status:"scheduled",responses:[]};
+   // Only derive a bounded familiarity signal; no private text/name enters the public notice.
+   const familiar=await c.query("SELECT npc_id FROM town_private_chats WHERE world_id=$1 AND visitor_id=$2 AND COALESCE((player_memory->>'familiarity')::int,0)>=3",[id,visitor]);
+   notifyGathering(w,a,Object.fromEntries(familiar.rows.map(r=>[r.npc_id,true])));
    w.gatherings=[...w.gatherings,a];
    await c.query("INSERT INTO town_notice_owners(id,world_id,visitor_id,request_id,request) VALUES($1,$2,$3,$4,$5)",[a.id,id,visitor,b.requestId,JSON.stringify(input)]);
    w.events.push({id:(w.revision+1)*1000+800,minute:w.minute,npcId:w.npcs[0].id,text:"公告板发布了新的广场聚会",reason:"发布者主动公开正文；未附加私人聊天。"});
