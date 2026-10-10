@@ -1,5 +1,5 @@
 // Whole-town composition. Presentation only; saved geometry/portals stay in town-map.
-import {TOWN_BUILDINGS,TOWN_ROADS,TOWN_PLAZAS,TOWN_LAWNS,BRIDGES,mapContains,type MapBox} from "./town-map";
+import {TOWN_BUILDINGS,TOWN_ROADS,TOWN_PLAZAS,TOWN_LAWNS,BRIDGES,STONE_APPROACH,mapContains,type MapBox} from "./town-map";
 export type XY={x:number;y:number};
 export const LANDMARKS=[
   {id:"old-town",name:"老街广场",polygon:[[65,110],[335,88],[620,120],[943,122],[976,245],[950,458],[907,598],[700,616],[375,621],[75,558]],tone:0},
@@ -11,6 +11,22 @@ export const LANDMARKS=[
   {id:"work-yard",name:"河畔工坊",polygon:[[1530,742],[1753,777],[1790,886],[1760,1094],[1560,1098],[1490,955]],tone:1},
 ] as const;
 export function inPolygon(x:number,y:number,points:readonly (readonly number[])[]){let inside=false;for(let i=0,j=points.length-1;i<points.length;j=i++){const a=points[i],b=points[j];if((a[1]>y)!==(b[1]>y)&&x<(b[0]-a[0])*(y-a[1])/(b[1]-a[1])+a[0])inside=!inside;}return inside;}
+// Region IDs are data, not canvas colours. Readback/antialiasing must never
+// decide an array index; sample pixel centres directly from authored geometry.
+export function districtMask(width:number,height:number,pixelSize:number){
+  const mask=new Uint8Array(width*height);
+  LANDMARKS.forEach((landmark,index)=>{
+    const xs=landmark.polygon.map(p=>p[0]),ys=landmark.polygon.map(p=>p[1]);
+    const left=Math.max(0,Math.floor(Math.min(...xs)/pixelSize));
+    const right=Math.min(width-1,Math.ceil(Math.max(...xs)/pixelSize));
+    const top=Math.max(0,Math.floor(Math.min(...ys)/pixelSize));
+    const bottom=Math.min(height-1,Math.ceil(Math.max(...ys)/pixelSize));
+    for(let y=top;y<=bottom;y++)for(let x=left;x<=right;x++){
+      if(inPolygon((x+.5)*pixelSize,(y+.5)*pixelSize,landmark.polygon))mask[y*width+x]=index+1;
+    }
+  });
+  return mask;
+}
 // Insets may extend over already-blocked land, NEVER over a saved walkable tile.
 export const floorAt=(x:number,y:number)=>[...TOWN_ROADS,...TOWN_PLAZAS,...TOWN_LAWNS].some(b=>mapContains(b,x,y));
 export function protectedFloor(x:number,y:number,margin=22){return [...TOWN_ROADS,...TOWN_PLAZAS,...TOWN_LAWNS].some(b=>x>=b.x-margin&&x<=b.x+b.w+margin&&y>=b.y-margin&&y<=b.y+b.h+margin);}
@@ -35,6 +51,9 @@ for(let i=0;i<2200;i++){
   const grove=FOREST_GROVES[i%FOREST_GROVES.length],theta=random(i*7)*Math.PI*2,r=Math.sqrt(random(i*7+1));
   const x=Math.round((grove.x+Math.cos(theta)*r*grove.rx)/2)*2,y=Math.round((grove.y+Math.sin(theta)*r*grove.ry)/2)*2;
   const h=84+Math.floor(random(i*7+2)*68);
+  // Keep the narrow new approach readable: a foreground crown must not hide it
+  // merely because its trunk sits just outside the walkable strip.
+  if(STONE_APPROACH.some(b=>x+h*.55>b.x&&x-h*.55<b.x+b.w&&y>b.y&&y-h<b.y+b.h))continue;
   if(x<16||x>2788||y<30||y>1590||protectedFloor(x,y,38)||!outsideHouse(x,y)||x>riverBanks(y).left-42&&x<riverBanks(y).right+42)continue;
   if(x>270&&x<1450&&y>945&&y<1110)continue;
   if(LANDSCAPE_TREES.some(t=>Math.hypot(t[0]-x,(t[1]-y)*1.25)<64))continue;

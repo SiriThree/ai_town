@@ -1,10 +1,11 @@
 import {describe,it,expect} from "vitest";
 import {createHash} from "node:crypto";
 import {SCENES,PORTALS,canStand} from "../src/lib/scene-data";
+import {STONE_APPROACH} from "../src/lib/town-map";
 import {SLICE_TREES,SLICE_FLOWERS,STREET_PROPS,GARDEN_EDGES,SHORE_ROCKS,COURTYARD_FENCES} from "../src/lib/town-dressing";
 describe("visual slice preserves the saved world's physical contract",()=>{
-  it("keeps the V9.4 scene geometry and paired portals exactly unchanged",()=>{
-    const geometry={scenes:Object.fromEntries(Object.entries(SCENES).map(([id,s])=>[id,{size:s.size,walkable:s.walkable,obstacles:s.obstacles}])),portals:PORTALS};
+  it("preserves all V9.4 geometry and portals apart from additive V10.4 Stone approach floor",()=>{
+    const geometry={scenes:Object.fromEntries(Object.entries(SCENES).map(([id,s])=>[id,{size:s.size,walkable:id==="town"?s.walkable.filter(b=>!STONE_APPROACH.includes(b)):s.walkable,obstacles:s.obstacles}])),portals:PORTALS};
     expect(createHash("sha256").update(JSON.stringify(geometry)).digest("hex")).toBe("05d093822d2451f9021dc6f43fb151a97c8dacea8a9065d692e4c6cfceb33e16");
   });
   it("never dresses a traversable point with a tree, solid prop or planted boundary",()=>{

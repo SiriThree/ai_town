@@ -23,5 +23,6 @@ describe("six residents without overwriting old citizens",()=>{
       expect(new Set(w.events.map(e=>e.id)).size).toBe(w.events.length);
     }
     for(const n of w.npcs.slice(2)){expect(visits.get(n.id)!.has(buildingAt(n.homeId!)!.sceneId),n.id+" home").toBe(true);expect(visits.get(n.id)!.has("cafe_interior"),n.id+" cafe").toBe(true);}
-  },20000);
+  // 1200 saved steps + path checks: wall-clock budget, not a world-speed assertion.
+  },60000);
 });

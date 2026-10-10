@@ -25,7 +25,7 @@ async function move(page,axis,target){
   let current=await value();
   if(Math.abs(target-current)>12){
     const positive=target>current,key=axis==="x"?(positive?"d":"a"):(positive?"s":"w");await page.keyboard.down(key);
-    try{await page.waitForFunction(({axis,target,positive})=>{const v=Number(document.querySelector('[data-testid="player"]').dataset[axis]);return positive?v>=target-10:v<=target+10;},{axis,target,positive},{timeout:30000});}finally{await page.keyboard.up(key);}
+    try{await page.waitForFunction(({axis,target,positive})=>{const v=Number(document.querySelector('[data-testid="player"]').dataset[axis]);return positive?v>=target-10:v<=target+10;},{axis,target,positive},{timeout:30000});}catch(error){throw new Error(`keyboard blocked: ${axis} target ${target}, actual ${await value()}, player ${await page.getByTestId("player").getAttribute("data-x")},${await page.getByTestId("player").getAttribute("data-y")}`,{cause:error});}finally{await page.keyboard.up(key);}
   }
   // Browser keyup crosses a process boundary. Brake and correct at a turn rather than
   // carrying a several-pixel overshoot into the next narrow corridor. No position writes.

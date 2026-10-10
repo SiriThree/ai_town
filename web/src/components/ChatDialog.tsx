@@ -2,8 +2,9 @@
 import { useEffect, useRef, useState } from "react";
 import { FALLBACK_LABELS, MAX_MESSAGE, type ChatTurn } from "../lib/chat-types";
 import { worldTime, type Npc } from "../lib/world";
+import type {ChatPhase} from "../lib/chat-feedback";
 
-export default function SceneChat({ npc, available, onClose, onReply, onProfile, historyOpen, onHistory }: { available:boolean; npc: Npc; onClose: () => void; onReply: (turn: ChatTurn | null) => void; onProfile: () => void; historyOpen: boolean; onHistory: (open: boolean) => void }) {
+export default function SceneChat({ npc, available, onClose, onReply, onProfile, historyOpen, onHistory,onPhaseChange }: { onPhaseChange:(phase:ChatPhase)=>void; available:boolean; npc: Npc; onClose: () => void; onReply: (turn: ChatTurn | null) => void; onProfile: () => void; historyOpen: boolean; onHistory: (open: boolean) => void }) {
   const replyCallback = useRef(onReply);
   useEffect(() => { replyCallback.current = onReply; }, [onReply]);
   const list = useRef<HTMLDivElement>(null);
@@ -15,6 +16,8 @@ export default function SceneChat({ npc, available, onClose, onReply, onProfile,
   const [loading,setLoading] = useState(true);
   const [pending,setPending] = useState(false);
   const [error,setError] = useState("");
+  const [replied,setReplied]=useState(false);
+  useEffect(()=>onPhaseChange(pending?"sending":error?"error":replied?"replied":"ready"),[pending,error,replied,onPhaseChange]);
   const endpoint = `/api/npcs/${npc.id}/chat`;
   useEffect(() => {
     alive.current = true;
@@ -48,7 +51,7 @@ export default function SceneChat({ npc, available, onClose, onReply, onProfile,
       const response=await fetch(endpoint,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({message}),signal:AbortSignal.timeout(25000)});
       const data=await response.json();
       if(!response.ok) throw new Error(data.error || "对话发送失败");
-      if(alive.current){setTurns(previous=>[...previous,data].slice(-20));setDraft("");replyCallback.current(data);}
+      if(alive.current){setTurns(previous=>[...previous,data].slice(-20));setDraft("");setReplied(true);replyCallback.current(data);}
     } catch(e) {
       try {await readHistory();} catch { /* Retain the last confirmed history. */ }
       if(alive.current) setError(`${e instanceof Error && e.name !== "TypeError" && e.name !== "TimeoutError" ? e.message : "对话连接中断"}。请核对记录；未自动重发。`);
@@ -64,6 +67,7 @@ export default function SceneChat({ npc, available, onClose, onReply, onProfile,
     <div className="composer-status" aria-live="polite" aria-busy={pending||loading}>
       {loading ? <p>正在翻开之前的对话…</p> : pending ? <p className="chat-wait" role="status">你：{draft.slice(0,60)}<span> · 已发送，{npc.name}正在想一想…</span></p> : latest ? <p className="player-preview" title={latest.message}><strong>你：</strong>{latest.message}<small> · 回复见角色头顶；镜头外可查看历史</small></p> : <p>向{npc.name}打个招呼吧。回复会出现在角色头顶。</p>}
     </div>
+    <p className="composer-hint" data-testid="chat-live-action" data-action-id={npc.ongoing?.id}>居民当前：{npc.action}{npc.ongoing&&` · ${Math.floor(npc.ongoing.elapsedMs/1000)}/${Math.ceil(npc.ongoing.durationMs/1000)} 秒`}（来自世界存档，打开手记不会暂停行动）</p>
     {!available&&<p className="chat-error">居民已离开交谈范围或正在忙碌；本次已发送消息仍会保存，靠近空闲居民后可继续。</p>}
     {error && <div className="chat-error" role="alert"><p>{error}</p><button onClick={reload} disabled={pending||loading}>重读记录</button></div>}
     <form onSubmit={e=>{e.preventDefault();void send();}}>

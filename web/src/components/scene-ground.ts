@@ -1,7 +1,7 @@
 import {Texture,Sprite} from "pixi.js";
 import {ART_PIXEL} from "../lib/scene-motion";
 import {TOWN_SIZE,TOWN_ROADS,TOWN_PLAZAS,TOWN_LAWNS,BRIDGES,STEPS,mapContains} from "../lib/town-map";
-import {LANDMARKS,FOREST_GROVES,MAIN_STREETS,riverBanks} from "../lib/town-landscape";
+import {LANDMARKS,FOREST_GROVES,MAIN_STREETS,riverBanks,districtMask} from "../lib/town-landscape";
 let groundTexture:Texture|undefined;
 const hash=(x:number,y:number)=>{let n=Math.imul(x+391,374761393)^Math.imul(y+971,668265263);n=Math.imul(n^(n>>>13),1274126177);return (n^(n>>>16))>>>0;};
 const groundSprite=(t:Texture)=>{const s=new Sprite(t);s.scale.set(ART_PIXEL);return s;};
@@ -10,14 +10,12 @@ export function drawGround(){
   if(groundTexture&&!groundTexture.destroyed)return groundSprite(groundTexture);
   const canvas=document.createElement("canvas");canvas.width=TOWN_SIZE.width/2;canvas.height=TOWN_SIZE.height/2;
   const width=canvas.width,height=canvas.height,ctx=canvas.getContext("2d")!,data=ctx.createImageData(width,height);
-  const masks=new Uint8Array(width*height),district=new Uint8Array(width*height);
+  const masks=new Uint8Array(width*height),district=districtMask(width,height,ART_PIXEL);
   // Rasterize the physical floor once; all visible paving is clipped to the same geometry.
   for(const [list,value]of [[TOWN_ROADS,1],[TOWN_LAWNS,3],[TOWN_PLAZAS,2]] as const)for(const b of list){
     for(let y=Math.max(0,Math.ceil(b.y/2));y<=Math.min(height-1,Math.floor((b.y+b.h)/2));y++)for(let x=Math.max(0,Math.ceil(b.x/2));x<=Math.min(width-1,Math.floor((b.x+b.w)/2));x++)masks[y*width+x]=value;
   }
   ctx.imageSmoothingEnabled=false;
-  LANDMARKS.forEach((l,i)=>{ctx.beginPath();l.polygon.forEach(([x,y],k)=>k?ctx.lineTo(x/2,y/2):ctx.moveTo(x/2,y/2));ctx.closePath();ctx.fillStyle=`rgb(${i+1},0,0)`;ctx.fill();});
-  const encoded=ctx.getImageData(0,0,width,height).data;for(let i=0;i<district.length;i++)district[i]=encoded[i*4];
   const floor=(x:number,y:number)=>x>=0&&x<width&&y>=0&&y<height?masks[y*width+x]:0;
   for(let y=0;y<height;y++){
     const wy=y*2,banks=riverBanks(wy);
@@ -40,12 +38,21 @@ export function drawGround(){
         if(edge>22&&flow%9===0&&y%3===0&&x%10<7)c=[106,182,188];
         if(edge<10&&h%5===0)c=[194,186,139];
       }else if(floor(x,y)){
+        const workshop=wx>=1590&&wx<=1750&&wy>=968&&wy<1122;
+        const porch=wx>=1626&&wx<=1714&&wy<=1006;
+        const stoneSpine=Math.abs(wx-1670-(Math.floor(wy/18)%2)*4)<18&&y%9!==8;
         const civic=wy>=822&&wy<=922&&wx>=330&&wx<=1370;
         const shop=(wx>=664&&wx<=874&&wy<402)||(wx>=1080&&wx<=1230&&wy<427);
         const bridgehead=BRIDGES.some(b=>Math.abs(wy-b.y-b.h/2)<40&&(Math.abs(wx-b.x)<65||Math.abs(wx-b.x-b.w)<65));
         const stepping=STEPS.some(b=>mapContains(b,wx,wy))||(wx>=990&&wx<=1070&&wy>=949&&wy<1035);
         if(stepping){c=y%5===0?[97,94,77]:y%5===1?[219,201,157]:[167+n,157+n,126+n];}
-        else if(floor(x,y)===2||shop||bridgehead){
+        else if(workshop&&!porch&&!stoneSpine){
+          const edgeDistance=Math.min(wx-1590,1750-wx,wy-968,1122-wy);
+          const worn=Math.abs(wx-1670)<32;
+          c=worn?[198+n,171+n,114+n]:edgeDistance<10?[119+n,147+n,76+n]:[151+n,153+n,93+n];
+          if(h%17===0)c=[194+n,179+n,129+n];
+        }
+        else if(floor(x,y)===2||shop||bridgehead||workshop&&(porch||stoneSpine)){
           const row=Math.floor(y/6),col=(x+(row%2)*7)%14,v=hash(Math.floor((x+(row%2)*7)/14),row)%17;
           c=y%6===5||col===13?[117,115,94]:civic?[165+v,164+v,141+v]:shop?[180+v,157+v,111+v]:[181+v,174+v,143+v];
           if(y%6===0&&col<12)c=c.map(a=>a+17);

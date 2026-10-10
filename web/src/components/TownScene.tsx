@@ -141,7 +141,11 @@ export default function TownScene({ world, selected, onSelect, speech, onExpand,
       host.current!.dataset.ready = "true";
       host.current!.dataset.paints = "1";setRenderReady(true);
     }
-    start().catch(() => { if(!cancelled) setError("场景渲染未能启动。请使用支持 WebGL 的浏览器；下方居民入口仍可查看真实存档。"); });
+    start().catch((cause:unknown) => {
+      if(cancelled)return;
+      console.error("[town-scene] Scene startup failed",cause);
+      setError("场景暂时未能加载，请刷新页面重试。存档不受影响；下方居民入口仍可查看真实状态。");
+    });
     return () => { cancelled = true; cancelAnimationFrame(animationFrame);renderer.current = null; if (ready && localApp) localApp.destroy(true, { children: true, context: true }); };
   }, []);
   return <div ref={viewport} className={`scene ${sceneId} ${transform.scale<.75?"overview-mode":"play-mode"}`} tabIndex={0} data-scene={sceneId} data-testid="scene-viewport" aria-label="小镇场景"

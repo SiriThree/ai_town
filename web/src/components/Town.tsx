@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {busyReason} from "../lib/interaction";
+import {chatFeedback,type ChatPhase} from "../lib/chat-feedback";
 import {personalMemories} from "../lib/experiences";
 import TownScene from "./TownScene";
 import SceneChat from "./ChatDialog";
@@ -39,6 +40,7 @@ export default function Town() {
   const [selected, setSelected] = useState("");
   const [panel, setPanel] = useState<"profile" | "log" | null>(null);
   const [chatOpen, setChatOpen] = useState(false);
+  const [chatPhase,setChatPhase]=useState<ChatPhase>("ready");
   const [historyOpen, setHistoryOpen] = useState(false);
   const [speech, setSpeech] = useState<{ npcId: string; turn: ChatTurn } | null>(null);
   const [pending, setPending] = useState(true);
@@ -62,7 +64,7 @@ export default function Town() {
   }, [commit]);
   useEffect(() => { if (panel === "log") dialog.current?.showModal(); else dialog.current?.close(); }, [panel]);
   const select = (id: string) => {
-    setSelected(id); setPanel("profile"); setChatOpen(false); setHistoryOpen(false); if(id !== selected) setSpeech(null);
+    setSelected(id); setPanel("profile"); setChatOpen(false); setHistoryOpen(false); setInteractionMessage(""); if(id !== selected) setSpeech(null);
     const url = new URL(location.href); url.searchParams.set("npc", id);
     history.replaceState(null, "", url);
   };
@@ -70,7 +72,7 @@ export default function Town() {
   function talk(id:string){
     const n=current.current?.npcs.find(n=>n.id===id);if(!n||!nearbyIds.split(",").includes(id))return;
     const busy=busyReason(n,current.current!);if(busy){setInteractionMessage(busy);return;}
-    setSelected(id);setPanel(null);setChatOpen(true);setHistoryOpen(false);if(id!==selected)setSpeech(null);setInteractionMessage(`正在与${n.name}交谈 · Esc 结束`);
+    setSelected(id);setPanel(null);setChatOpen(true);setChatPhase("ready");setHistoryOpen(false);if(id!==selected)setSpeech(null);setInteractionMessage("");
     const url=new URL(location.href);url.searchParams.set("npc",id);history.replaceState(null,"",url);
   }
   useEffect(()=>{
@@ -138,6 +140,8 @@ export default function Town() {
   }
   const npc = world?.npcs.find(n => n.id === selected);
   const present=npc?.sceneId===sceneId;
+  const chatAvailable=!!npc&&nearbyIds.split(",").includes(npc.id)&&!!world&&!busyReason(npc,world);
+  const feedback=chatOpen&&npc?chatFeedback(npc.name,chatPhase,present,chatAvailable):interactionMessage;
   return <main>
     <header className="town-header">
       <div className="brand"><span className="brand-mark" aria-hidden>✦</span><div><h1>晨露村</h1><p>小镇手记 <span> / </span> 第一章</p></div></div>
@@ -149,14 +153,14 @@ export default function Town() {
     {world ? <>
       <section className={`scene-frame ${sceneId!=="town"?"interior":""}`}>
         <TownScene onTalk={talk} onNearChange={setNearbyIds} onPublicHistory={()=>setPanel("log")} controlsBlocked={panel!==null||(historyOpen&&!!present)} onSceneChange={setSceneId} world={world} selected={selected} onSelect={select} speech={chatOpen && speech?.npcId===selected ? speech.turn : null} onExpand={()=>setHistoryOpen(true)} />
-        {interactionMessage&&<p className="interaction-feedback" role="status" data-testid="interaction-feedback">{interactionMessage}</p>}
+        {feedback&&<p className="interaction-feedback" role="status" data-testid="interaction-feedback">{feedback}</p>}
         <div className="interaction-dock" hidden={!present}>
         {npc && <div className="resident-care" aria-label="居民干预" onPointerDown={e=>e.stopPropagation()} onKeyDown={e=>e.stopPropagation()}>
           <div><strong>{npc.name}</strong><span>⌖ {npcPlace(npc,world)}</span><span>饥饿 <b data-testid="care-hunger">{npc.hunger}</b>/100</span></div>
           <button disabled={pending||syncing||npc.hunger<=0} onClick={feed}>送食物 <small>饥饿 −{FOOD_AMOUNT}</small></button>
           <p data-testid="food-feedback">{foodFeedback?.npcId===npc.id?foodFeedback.text:npc.hunger<=0?"已经吃饱，暂不需要食物。":"提供食物不会改变地点或直接指定下一步行动。"}</p>
         </div>}
-        {chatOpen && npc && <SceneChat key={npc.id} npc={npc} onClose={closeChat} available={nearbyIds.split(",").includes(npc.id)&&!busyReason(npc,world)} onReply={turn=>setSpeech(turn ? {npcId:npc.id,turn} : null)} onProfile={()=>setPanel(panel==="profile"?null:"profile")} historyOpen={historyOpen} onHistory={setHistoryOpen} />}
+        {chatOpen && npc && <SceneChat key={npc.id} npc={npc} onClose={closeChat} available={chatAvailable} onPhaseChange={setChatPhase} onReply={turn=>setSpeech(turn ? {npcId:npc.id,turn} : null)} onProfile={()=>setPanel(panel==="profile"?null:"profile")} historyOpen={historyOpen} onHistory={setHistoryOpen} />}
         </div>
         {panel === "profile" && npc && <aside className="paper profile" aria-label="居民档案" data-testid="profile">
           <div className="panel-heading"><span>居 民 档 案</span><button aria-label="关闭档案" onClick={() => setPanel(null)}>×</button></div>

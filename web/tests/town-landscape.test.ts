@@ -1,8 +1,20 @@
 import {describe,it,expect} from "vitest";
 import {canStand,PORTALS} from "../src/lib/scene-data";
-import {LANDSCAPE_TREES,YARD_FENCES,DISTRICT_PROPS,landscapeWater,riverBanks,LANDMARKS} from "../src/lib/town-landscape";
+import {LANDSCAPE_TREES,YARD_FENCES,DISTRICT_PROPS,landscapeWater,riverBanks,LANDMARKS,districtMask,inPolygon} from "../src/lib/town-landscape";
 import {BRIDGES} from "../src/lib/town-map";
 describe("whole-map landscape remains compatible with saved paths",()=>{
+  it("district IDs come from geometry and remain valid on boundaries and overlaps without canvas readback",()=>{
+    const width=1400,height=800,mask=districtMask(width,height,2);
+    expect(new Set(mask)).toEqual(new Set([0,1,2,3,4,5,6,7]));
+    for(let y=0;y<height;y+=7)for(let x=0;x<width;x+=7){
+      let expected=0;
+      LANDMARKS.forEach((l,i)=>{if(inPolygon(x*2+1,y*2+1,l.polygon))expected=i+1;});
+      expect(mask[y*width+x]).toBe(expected);
+    }
+    expect(mask[0]).toBe(0);
+    expect(mask[200*width+250]).toBe(1);
+    expect(mask[400*width+400]).toBe(3);
+  });
   it("has authored districts, variable banks and irregular groves, without adding buildings",()=>{
     expect(LANDMARKS).toHaveLength(7);expect(PORTALS.filter(p=>p.source==="town")).toHaveLength(12);
     expect(LANDSCAPE_TREES.length).toBeGreaterThan(100);expect(new Set(LANDSCAPE_TREES.map(t=>t[1])).size).toBeGreaterThan(80);

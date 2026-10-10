@@ -4,6 +4,9 @@ export const TOWN_SIZE={width:2800,height:1600};
 export const RIVER={x:1830,y:0,w:90,h:1600};
 export const BRIDGES:MapBox[]=[{x:1800,y:542,w:150,h:80},{x:1800,y:1122,w:150,h:80}];
 export const STEPS:MapBox[]=[{x:990,y:766,w:80,h:48}];
+// Additive V10.4 access: skirt Stone House's west wall, then join its south door.
+// Existing doors, obstacles and saved NPC routes remain unchanged.
+export const STONE_APPROACH:MapBox[]=[{x:2390,y:1160,w:40,h:142},{x:2390,y:1230,w:180,h:72}];
 export const NEW_BUILDINGS=[
   {id:"hall",name:"晨光会馆",texture:"hall",x:410,y:807,height:242},
   {id:"clinic",name:"河风诊所",texture:"clinic",x:800,y:807,height:210},
@@ -28,6 +31,7 @@ export const TOWN_ROADS:MapBox[]=[
   {x:2440,y:1262,w:300,h:80},
   ...NEW_BUILDINGS.slice(0,3).map(b=>({x:b.x-40,y:b.y+4,w:80,h:90})),
   ...BRIDGES,
+  ...STONE_APPROACH,
 ];
 export const TOWN_PLAZAS:MapBox[]=[{x:355,y:288,w:255,h:194},{x:1080,y:332,w:150,h:94},{x:330,y:822,w:1040,h:100},{x:1590,y:980,w:160,h:116}];
 export const TOWN_LAWNS:MapBox[]=[{x:1370,y:510,w:310,h:120}];
