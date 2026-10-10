@@ -1,4 +1,4 @@
-import type {Gathering} from "./gatherings";
+import {refreshGatherings,gatheringDecision,assertGatherings,type Gathering} from "./gatherings";
 import {STEP_MS,STEP_MINUTES,WALK_SPEED,pathLength,pathPoint,pathSection,actionDuration,type OngoingAction} from "./action-time";
 import {prepareWork,settleWork,assertWork,workPoint,helperPoint,helpTarget,taskName,type WorkTask,type WorkResult} from "./work";
 import {buildingAt,buildingIn,portalById,nearPortal,HOME_REST,homePath,validScenePath,npcCafeSpawn,canStand,portalSpawn,type SceneId} from "./scene-data";
@@ -194,7 +194,7 @@ export function execute(npc: Npc, decision: Decision, world: World): Npc {
 }
 // Start does not apply the preview's effects. Only settlement may change needs/location.
 function beginAction(n:Npc,w:World):Npc {
-  const decision=appointmentDecision(n,w)??decide(n,w),preview=execute(n,decision,w),path=preview.lastPath;
+  const decision=appointmentDecision(n,w)??gatheringDecision(n,w)??decide(n,w),preview=execute(n,decision,w),path=preview.lastPath;
   const ongoing:OngoingAction={id:`action:${w.revision}:${n.id}`,decision,sceneId:n.sceneId,startedMinute:w.minute-STEP_MINUTES,
     elapsedMs:0,durationMs:actionDuration(decision.action.kind,path),path:structuredClone(path)};
   const label=path.length>1?`正在行走 · ${preview.action.replace(/^来到|^走到|^走向/,"")}`:
@@ -231,6 +231,7 @@ export function advanceWorld(world: World): World {
   if(Math.floor(next.minute/30)!==Math.floor(world.minute/30))
     next.npcs=next.npcs.map(n=>({...n,hunger:clamp(n.hunger+2),energy:clamp(n.energy-1),mood:clamp(n.mood-1)}));
   prepareWork(next);
+  refreshGatherings(next);
   const talking=advanceConversations(next);
   for (let i=0;i<next.npcs.length;i++) {
     let n=next.npcs[i];
@@ -241,7 +242,7 @@ export function advanceWorld(world: World): World {
     refreshAppointment(result.npc,next);
     if(result.completed)next.events.push({id:next.revision*1000+i,minute:next.minute,npcId:n.id,text:`${n.name} · ${result.npc.action}`,reason:n.reason});
   }
-  settleWork(next);beginSocial(next);observeEncounters(next);
+  settleWork(next);refreshGatherings(next);beginSocial(next);observeEncounters(next);
   next.events=next.events.slice(-100);return next;
 }
 export function giveFood(world: World, npcId: string): World {
@@ -295,7 +296,7 @@ export function assertWorld(value: unknown): asserts value is World {
   if (!w || w.schemaVersion !== 2 || !Number.isSafeInteger(w.revision) || w.revision < 0 || !Number.isSafeInteger(w.minute) || w.minute < 480 || (!Array.isArray(w.npcs)||w.npcs.length<2||w.npcs.length>30) || !Array.isArray(w.events) || (!Array.isArray(w.locations)||w.locations.length<3) || !LOCATIONS.every((l, i) => w.locations[i].id === l.id && w.locations[i].name === l.name && w.locations[i].use === l.use)) throw new Error("不兼容的世界存档");
   if (new Set(w.npcs.map(n => n.id)).size !== w.npcs.length) throw new Error("重复的居民存档");
   if (w.run !== undefined && (!w.run || typeof w.run.running !== "boolean" || (w.run.running ? !Number.isSafeInteger(w.run.nextTickAt) || w.run.nextTickAt! < 0 : w.run.nextTickAt !== null))) throw new Error("运行状态存档无效");
-  assertExperiences(w);assertSocial(w);assertWork(w);
+  assertExperiences(w);assertSocial(w);assertWork(w);assertGatherings(w);
   for (const n of w.npcs) {
     if(n.appointment){const a=n.appointment;if(a.target!=="cafe"||!/^[-a-f0-9]{36}$/.test(a.id)||!["accepted","waiting","travelling","arrived","met","missed","failed","cancelled"].includes(a.status)||![a.createdMinute,a.updatedMinute,a.deadlineMinute].every(Number.isSafeInteger)||a.updatedMinute>w.minute||a.deadlineMinute<=a.createdMinute)throw new Error("会合约定存档无效");}
     if(n.appointment?.scheduledMinute!==undefined){const a=n.appointment;
