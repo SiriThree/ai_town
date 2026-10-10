@@ -5,7 +5,7 @@ import {chatFeedback,type ChatPhase} from "../lib/chat-feedback";
 import {personalMemories} from "../lib/experiences";
 import TownScene from "./TownScene";
 import SceneChat from "./ChatDialog";
-import { SCENES, type SceneId } from "../lib/player-scene";
+import { SCENES, type SceneId,type Player } from "../lib/player-scene";
 import type { ChatTurn } from "../lib/chat-types";
 import {npcPlace, runState, FOOD_AMOUNT, worldTime, type World } from "../lib/world";
 
@@ -24,6 +24,9 @@ async function load(): Promise<World> {
   return result.value;
 }
 export default function Town() {
+  const playerPosition=useRef<Player|null>(null);
+  const rememberPosition=useCallback((player:Player)=>{playerPosition.current=player;},[]);
+  const getPlayer=useCallback(()=>playerPosition.current,[]);
   const [diagnostics,setDiagnostics]=useState(false);
   const [helpOpen,setHelpOpen]=useState(false);
   const [nearbyIds,setNearbyIds]=useState("");
@@ -153,7 +156,7 @@ export default function Town() {
   const feedback=chatOpen&&npc?chatFeedback(npc.name,chatPhase,present,chatAvailable):interactionMessage;
   return <main className={diagnostics?"diagnostics-mode":"game-mode"}>
     <header className="town-header">
-      <div className="brand"><span className="brand-mark" aria-hidden>✦</span><div><h1>晨露村</h1><p>小镇手记 <span> / </span> 第一章</p></div></div>
+      <div className="brand"><span className="brand-mark" aria-hidden>✦</span><div><h1>晨露村</h1></div></div>
       <div className="clock"><span className="sun" aria-hidden>☀</span><div><strong data-testid="world-time">{world ? worldTime(world.minute) : "等待存档"}</strong><small data-testid="run-status">{world && runState(world).running ? "时光流转" : "时光暂停"}</small></div></div>
       <button className="run-toggle" aria-pressed={!!world && runState(world).running} disabled={pending || syncing || !world} onClick={toggleRun}>{world && runState(world).running ? "暂停自动运行" : "开始自动运行"}</button>
       <button className="advance" disabled={pending || syncing || !world} onClick={advance}>{pending ? "处理中…" : "推进一步"}<span aria-hidden> ▷</span></button>
@@ -163,7 +166,7 @@ export default function Town() {
     {(diagnostics||error||syncError)&&<div className="status-line"><p role="status">{error || syncError || message}</p>{diagnostics&&<span>网页打开时自动推进 · 无离线补算</span>}{error && <button disabled={pending} onClick={reload}>重新读取</button>}</div>}
     {world ? <>
       <section className={`scene-frame ${sceneId!=="town"?"interior":""}`}>
-        <TownScene diagnostics={diagnostics} onTalk={talk} onNearChange={setNearbyIds} onPublicHistory={()=>setPanel("log")} controlsBlocked={panel!==null||(historyOpen&&!!present)} onSceneChange={setSceneId} world={world} selected={selected} onSelect={select} speech={chatOpen && speech?.npcId===selected ? speech.turn : null} onExpand={()=>setHistoryOpen(true)} />
+        <TownScene onPlayerChange={rememberPosition} diagnostics={diagnostics} onTalk={talk} onNearChange={setNearbyIds} onPublicHistory={()=>setPanel("log")} controlsBlocked={panel!==null||(historyOpen&&!!present)} onSceneChange={setSceneId} world={world} selected={selected} onSelect={select} speech={chatOpen && speech?.npcId===selected ? speech.turn : null} onExpand={()=>setHistoryOpen(true)} />
         {feedback&&(diagnostics||!chatOpen||chatPhase==="sending"||chatPhase==="error")&&<p className="interaction-feedback" role="status" data-testid="interaction-feedback">{feedback}</p>}
         <div className="interaction-dock" hidden={!present}>
         {npc && panel==="profile" && <div className="resident-care" aria-label="居民干预" onPointerDown={e=>e.stopPropagation()} onKeyDown={e=>e.stopPropagation()}>
@@ -171,7 +174,7 @@ export default function Town() {
           <button disabled={pending||syncing||npc.hunger<=0} onClick={feed}>送食物 <small>饥饿 −{FOOD_AMOUNT}</small></button>
           <p data-testid="food-feedback">{foodFeedback?.npcId===npc.id?foodFeedback.text:npc.hunger<=0?"已经吃饱，暂不需要食物。":""}</p>
         </div>}
-        {chatOpen && npc && <SceneChat diagnostics={diagnostics} key={npc.id} npc={npc} onClose={closeChat} available={chatAvailable} onPhaseChange={setChatPhase} onReply={receiveReply} onProfile={()=>setPanel(panel==="profile"?null:"profile")} historyOpen={historyOpen} onHistory={setHistoryOpen} />}
+        {chatOpen && npc && <SceneChat getPlayer={getPlayer} diagnostics={diagnostics} key={npc.id} npc={npc} onClose={closeChat} available={chatAvailable} onPhaseChange={setChatPhase} onReply={receiveReply} onProfile={()=>setPanel(panel==="profile"?null:"profile")} historyOpen={historyOpen} onHistory={setHistoryOpen} />}
         </div>
         {panel === "profile" && npc && <aside className="paper profile" aria-label="居民档案" data-testid="profile">
           <div className="panel-heading"><span>居 民 档 案</span><button aria-label="关闭档案" onClick={() => setPanel(null)}>×</button></div>
@@ -187,7 +190,7 @@ export default function Town() {
       </section>
       <section className="town-bottom">
         {diagnostics&&<div className="residents"><small>今日居民</small><div>{world.npcs.map(n => <button key={n.id} disabled={n.sceneId!==sceneId} aria-pressed={selected===n.id} onClick={() => select(n.id)}><span className={`resident-dot ${n.id}`} />{n.name}<span className="resident-action">{n.sceneId!==sceneId?SCENES[n.sceneId].name:n.action}</span></button>)}</div></div>}
-        <div className="latest"><div className="latest-title"><h2>街角近况</h2><button onClick={() => setPanel("log")}>打开日志 <span aria-hidden>↗</span></button></div><div data-testid="latest-events">{world.events.length ? world.events.slice(-2).map(e => <p key={e.id}><time>{worldTime(e.minute).split(" · ")[1]}</time>{e.text}</p>) : <p className="muted">清晨的小镇刚刚醒来，日常将在下一步发生。</p>}</div></div>
+        <div className="latest"><div className="latest-title"><button onClick={() => setPanel("log")}>打开日志 <span aria-hidden>↗</span></button></div><div data-testid="latest-events">{world.events.length ? world.events.slice(-2).map(e => <p key={e.id}><time>{worldTime(e.minute).split(" · ")[1]}</time>{e.text}</p>) : <p className="muted">清晨的小镇刚刚醒来，日常将在下一步发生。</p>}</div></div>
       </section>
       {diagnostics&&<footer><span>共享存档：所有访客可推进、暂停和送食物。</span><span data-testid="revision">存档版本 {world.revision}</span></footer>}
       <dialog ref={dialog} className="paper log-dialog" onCancel={() => setPanel(null)}>

@@ -1,7 +1,8 @@
 import { chat, chatHistory } from "../../../../../lib/chat-service";
 import { checkOrigin, failed, json, readJson } from "../../../../../lib/http";
 import { visitorSession } from "../../../../../lib/visitor-session";
-import {privateAppointments} from "../../../../../lib/invitation-store";
+import {privateAppointments,recordMeeting} from "../../../../../lib/invitation-store";
+import {requireChatSlot} from "../../../../../lib/chat-limits";
 import {worldId} from "../../../../../lib/store";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -20,8 +21,9 @@ export async function GET(request: Request, context: Context) {
 export async function POST(request: Request, context: Context) {
   try {
     checkOrigin(request);
-    const body = await readJson(request) as {message?:unknown;requestId?:unknown} | null;
+    const body = await readJson(request) as {message?:unknown;requestId?:unknown;interaction?:unknown;presence?:unknown} | null;
     const session=visitorSession(request);
+    if(body?.interaction==="meet"){await requireChatSlot(worldId());return json(await recordMeeting(worldId(),(await context.params).npcId,session.id,body.presence));}
     return json(await chat((await context.params).npcId,body?.message,session.id,worldId(),body?.requestId));
   } catch(error) { return failed(error); }
 }

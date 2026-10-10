@@ -296,7 +296,10 @@ export function assertWorld(value: unknown): asserts value is World {
   if (w.run !== undefined && (!w.run || typeof w.run.running !== "boolean" || (w.run.running ? !Number.isSafeInteger(w.run.nextTickAt) || w.run.nextTickAt! < 0 : w.run.nextTickAt !== null))) throw new Error("运行状态存档无效");
   assertExperiences(w);assertSocial(w);assertWork(w);
   for (const n of w.npcs) {
-    if(n.appointment){const a=n.appointment;if(a.target!=="cafe"||!/^[-a-f0-9]{36}$/.test(a.id)||!["accepted","waiting","travelling","arrived","failed","cancelled"].includes(a.status)||![a.createdMinute,a.updatedMinute,a.deadlineMinute].every(Number.isSafeInteger)||a.updatedMinute>w.minute||a.deadlineMinute<=a.createdMinute)throw new Error("会合约定存档无效");}
+    if(n.appointment){const a=n.appointment;if(a.target!=="cafe"||!/^[-a-f0-9]{36}$/.test(a.id)||!["accepted","waiting","travelling","arrived","met","missed","failed","cancelled"].includes(a.status)||![a.createdMinute,a.updatedMinute,a.deadlineMinute].every(Number.isSafeInteger)||a.updatedMinute>w.minute||a.deadlineMinute<=a.createdMinute)throw new Error("会合约定存档无效");}
+    if(n.appointment?.scheduledMinute!==undefined){const a=n.appointment;
+      if(![a.scheduledMinute,a.departMinute,a.waitUntilMinute,a.confirmedMinute,a.travelMinutes].every(Number.isSafeInteger)||a.scheduledMinute!<a.createdMinute||a.confirmedMinute!>w.minute||a.waitUntilMinute!<a.scheduledMinute!||a.travelMinutes!<0||a.status==="met"&&(!Number.isSafeInteger(a.metMinute)||a.metMinute!>w.minute||a.arrivedMinute===undefined||a.metMinute!<a.arrivedMinute))throw new Error("定时会合事实无效");
+    }
     if(n.ongoing){
       const a=n.ongoing;
       if(typeof a.id!=="string"||a.sceneId!==n.sceneId||!Number.isFinite(a.durationMs)||a.durationMs<=0||!Number.isFinite(a.elapsedMs)||a.elapsedMs<0||a.elapsedMs>=a.durationMs||!Number.isSafeInteger(a.startedMinute)||a.startedMinute>w.minute||!Array.isArray(a.path)||

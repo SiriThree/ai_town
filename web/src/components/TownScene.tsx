@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, type CSSProperties } from "react";
 import type { Application,Container } from "pixi.js";
 import type { ResidentArt } from "./scene-art";
 import { usePlayer } from "./use-player";
-import { enterPortal, SCENES, residentScene, type SceneId } from "../lib/player-scene";
+import { enterPortal, SCENES, residentScene, type SceneId, type Player } from "../lib/player-scene";
 import { ART_PIXEL, acceptPosition, poseAt, stillAt, type Motion, type Pose } from "../lib/scene-motion";
 import { FALLBACK_LABELS, type ChatTurn } from "../lib/chat-types";
 import { boundedCamera, followPlayer, overviewCamera, bubblePlacement, sceneTransform, type Camera } from "../lib/scene-view";
@@ -13,7 +13,7 @@ import {interactionTarget,nearbyResidents,NOTICE_BOARD} from "../lib/interaction
 import {INTERIORS} from "../lib/scene-data";
 import { MAP, runState, worldTime, type World } from "../lib/world";
 
-export default function TownScene({ diagnostics=false, world, selected, onSelect, speech, onExpand, onPublicHistory, onTalk, onNearChange, controlsBlocked, onSceneChange }: { diagnostics?:boolean; onTalk:(id:string)=>void; onNearChange:(ids:string)=>void; onPublicHistory:()=>void; controlsBlocked:boolean; onSceneChange:(id:SceneId)=>void; world: World; selected: string; onSelect: (id: string) => void; speech: ChatTurn | null; onExpand: () => void }) {
+export default function TownScene({ diagnostics=false, world, selected, onSelect, speech, onExpand, onPublicHistory, onTalk, onNearChange, onPlayerChange, controlsBlocked, onSceneChange }: { diagnostics?:boolean; onPlayerChange:(player:Player)=>void; onTalk:(id:string)=>void; onNearChange:(ids:string)=>void; onPublicHistory:()=>void; controlsBlocked:boolean; onSceneChange:(id:SceneId)=>void; world: World; selected: string; onSelect: (id: string) => void; speech: ChatTurn | null; onExpand: () => void }) {
   const viewport = useRef<HTMLDivElement>(null);
   const [renderReady,setRenderReady]=useState(false);
   const [poses,setPoses]=useState<Record<string,Pose>>(()=>Object.fromEntries(world.npcs.map(n=>[n.id,poseAt(stillAt(n.position),0)])));
@@ -25,6 +25,7 @@ export default function TownScene({ diagnostics=false, world, selected, onSelect
     onTalk(target.id);const dx=target.position.x-p.position.x,dy=target.position.y-p.position.y;
     return {...p,facing:Math.abs(dx)>Math.abs(dy)?(dx>0?"east":"west"):(dy>0?"south":"north")};
   });
+  useEffect(()=>onPlayerChange(player),[player,onPlayerChange]);
   const sceneId=player.sceneId;
   const dimensions=SCENES[sceneId].size;
   const target=interactionTarget(player,world.npcs,positions);
@@ -162,7 +163,7 @@ export default function TownScene({ diagnostics=false, world, selected, onSelect
       {SCENES[sceneId].portals.map(p=><span key={p.id} className={`door-marker ${target?.kind==="portal"&&target.id===p.id?"near":""}`} style={{left:p.position.x,top:p.position.y}} aria-hidden>◇</span>)}
     </div>
     {error && <p role="alert" className="scene-error">{error}</p>}
-    <div className="map-caption"><span>{SCENES[sceneId].name}</span>{diagnostics&&<small>{sceneId==="town"?(transform.scale<.75?"全景用于看布局 · 复位回到游玩镜头":"游玩视角 · 沿街散步，走进居民的生活。"):INTERIORS[sceneId].caption}</small>}</div>
+    {sceneId!=="town"&&<div className="map-caption"><span>{SCENES[sceneId].name}</span>{diagnostics&&<small>{INTERIORS[sceneId].caption}</small>}</div>}
     <div className="camera-tools" aria-label="地图镜头"><button aria-label="缩小地图" disabled={camera.zoom<=.25/baseScale} onClick={()=>zoom(-.25)}>−</button><output aria-label="地图缩放">{Math.round(transform.scale/baseScale*100)}%</output><button aria-label="放大地图" disabled={camera.zoom>=2.5} onClick={()=>zoom(.25)}>＋</button><button onClick={()=>setCamera(overviewCamera(size,sceneId))}>全景</button><button onClick={()=>setCamera(sceneId==="town"?followPlayer(player.position,size,{zoom:1,x:0,y:0},sceneId):{zoom:1,x:0,y:0})}>复位</button></div>
     {bubble && speaker && speech && <aside className="speech-bubble" data-testid="speech-bubble" data-npc={speaker.id} aria-label={`${speaker.name}的发言`} style={{left:bubble.left,top:bubble.top,width:bubble.width,height:bubble.height,"--tail-x":`${bubble.tail}px`} as CSSProperties}>
       <div className="speech-content" aria-live="polite"><div className="reply-heading"><strong>{speaker.name}</strong>{diagnostics&&<span data-testid="reply-source" className={`source-badge ${speech.source}`}>{speech.source==="ai"?(speech.testMode?"AI · 本地测试替身":"AI 回复"):`降级回复 · ${FALLBACK_LABELS[speech.reason!] || "本地规则"}`}</span>}</div><p data-testid="chat-reply">{bubbleText(speech.reply)}</p>{diagnostics&&<small>{worldTime(speech.minute)} · {speech.worldRevision===world.revision?"本次状态":"历史发言 · 世界已更新"}</small>}<button aria-label="查看这句对白的完整历史" className="bubble-open" onClick={onExpand}>{diagnostics?"展开全文与历史 ↗":"•••"}</button></div>

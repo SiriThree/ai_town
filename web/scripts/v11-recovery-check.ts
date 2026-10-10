@@ -8,14 +8,14 @@ import {chat} from "../src/lib/chat-service";
 import {restoreWorld,advanceWorld,assertWorld} from "../src/lib/world";
 const u=new URL(process.env.DATABASE_URL!);assert.equal(u.hostname,"127.0.0.1");assert.equal(u.port,"55488");assert.equal(u.pathname,"/ai_town_mvp_test");assert.ok(process.argv.includes("--restart-test-postgres"));
 process.env.AI_ENABLED="false";process.env.NPC_AI_ENABLED="false";
-const container="ai-town-selfbuilt-test-db-1",id=`v11-recovery-${randomUUID()}`,visitor="d".repeat(64),dir="evidence/v11/recovery";
+const container="ai-town-selfbuilt-test-db-1",id=`v11-recovery-${randomUUID()}`,visitor="d".repeat(64),dir=process.env.EVIDENCE_DIR||"evidence/v11/recovery";
 const ports=JSON.parse(execFileSync("docker",["inspect","--format","{{json .NetworkSettings.Ports}}",container],{encoding:"utf8"}));
 const mounts=JSON.parse(execFileSync("docker",["inspect","--format","{{json .Mounts}}",container],{encoding:"utf8"}));
 assert.deepEqual(ports["5432/tcp"],[{HostIp:"127.0.0.1",HostPort:"55488"}]);assert.ok(mounts.some((m:{Name:string})=>m.Name==="ai-town-selfbuilt_town_test"));
 await initializeWorld(id);await chat("aning","我叫归舟",visitor,id);await chat("aning","我们一起去咖啡馆吧",visitor,id,randomUUID());
 let w=await readWorld(id);w=await tickWorld(w.revision,id);assert.ok(w.npcs[1].ongoing?.path.length);
-const tested=JSON.parse(await readFile("evidence/v11/invitation-db/result.json","utf8")).id;
-const ids=[id,tested];
+const story=JSON.parse(await readFile(process.env.STORY_RESULT||"evidence/v11/invitation-db/result.json","utf8"));
+const ids=[id,story.id,...(story.extraIds??[])];
 async function snapshot(pool:Pool){return {
  worlds:(await pool.query("SELECT id,payload FROM town_worlds WHERE id=ANY($1) ORDER BY id",[ids])).rows,
  chats:(await pool.query("SELECT world_id,npc_id,visitor_id,turns,player_memory FROM town_private_chats WHERE world_id=ANY($1) ORDER BY world_id,npc_id,visitor_id",[ids])).rows,

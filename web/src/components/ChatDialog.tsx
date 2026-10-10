@@ -3,9 +3,12 @@ import { useEffect, useRef, useState } from "react";
 import { FALLBACK_LABELS, MAX_MESSAGE, type ChatTurn } from "../lib/chat-types";
 import { worldTime, type Npc } from "../lib/world";
 import type {ChatPhase} from "../lib/chat-feedback";
-import type {Appointment} from "../lib/appointments";
+import {appointmentReply,type Appointment} from "../lib/appointments";
+import type {Player} from "../lib/player-scene";
 
-export default function SceneChat({ diagnostics=false,npc, available, onClose, onReply, onProfile, historyOpen, onHistory,onPhaseChange }: {diagnostics?:boolean; onPhaseChange:(phase:ChatPhase)=>void; available:boolean; npc: Npc; onClose: () => void; onReply: (turn: ChatTurn | null) => void; onProfile: () => void; historyOpen: boolean; onHistory: (open: boolean) => void }) {
+const appointmentForMeeting=(appointments:Appointment[])=>appointments.find(a=>a.status==="arrived"&&a.scheduledMinute!==undefined)?.id;
+
+export default function SceneChat({ getPlayer,diagnostics=false,npc, available, onClose, onReply, onProfile, historyOpen, onHistory,onPhaseChange }: {getPlayer:()=>Player|null;diagnostics?:boolean; onPhaseChange:(phase:ChatPhase)=>void; available:boolean; npc: Npc; onClose: () => void; onReply: (turn: ChatTurn | null) => void; onProfile: () => void; historyOpen: boolean; onHistory: (open: boolean) => void }) {
   const replyCallback = useRef(onReply);
   useEffect(() => { replyCallback.current = onReply; }, [onReply]);
   const list = useRef<HTMLDivElement>(null);
@@ -34,10 +37,21 @@ export default function SceneChat({ diagnostics=false,npc, available, onClose, o
     return () => {alive.current=false;controller.abort();};
   },[endpoint]);
   useEffect(()=>{
+    // The first GET establishes the signed visitor cookie. A parallel initial GET
+    // could otherwise mint a second identity and race the first introduction POST.
+    if(loading)return;
     const controller=new AbortController();
     fetch(endpoint,{cache:"no-store",signal:controller.signal}).then(async r=>r.ok?r.json():null).then(data=>{if(data&&!controller.signal.aborted)setAppointments(data.appointments??[]);}).catch(()=>{});
     return()=>controller.abort();
-  },[endpoint,npc.appointment?.status,npc.appointment?.id]);
+  },[endpoint,npc.appointment?.status,npc.appointment?.id,loading]);
+  useEffect(()=>{
+    if(!available||!appointmentForMeeting(appointments)||appointmentForMeeting(appointments)!==npc.appointment?.id)return;
+    const presence=getPlayer();if(presence?.sceneId!=="cafe_interior")return;
+    let active=true;
+    fetch(endpoint,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({interaction:"meet",presence}),signal:AbortSignal.timeout(10000)})
+      .then(async r=>r.ok?r.json():null).then(data=>{if(active&&data?.meeting)setAppointments(list=>list.map(a=>a.id===data.meeting.id?data.meeting:a));}).catch(()=>{});
+    return()=>{active=false;};
+  },[endpoint,available,appointments,npc.appointment?.id,getPlayer]);
   useEffect(() => {list.current?.scrollTo({top:list.current.scrollHeight});},[turns,pending,historyOpen]);
   async function readHistory() {
     const response=await fetch(endpoint,{cache:"no-store",signal:AbortSignal.timeout(10000)});
@@ -51,10 +65,11 @@ export default function SceneChat({ diagnostics=false,npc, available, onClose, o
     try {await readHistory();} catch {if(alive.current)setError("对话记录读取失败，请稍后再试。");}
     finally {if(alive.current)setLoading(false);}
   }
-  async function send() {
-    const message=draft.trim();
+  async function send(confirmed?:string) {
+    const message=confirmed??draft.trim();
     if(!available||!message||sending.current||loading||error) return;
     sending.current=true;setPending(true);setError("");
+    if(confirmed)setDraft(confirmed);
     if(attempt.current?.message!==message)attempt.current={message,id:crypto.randomUUID()};
     try {
       const response=await fetch(endpoint,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({message,requestId:attempt.current.id}),signal:AbortSignal.timeout(25000)});
@@ -70,7 +85,7 @@ export default function SceneChat({ diagnostics=false,npc, available, onClose, o
   }
   const latest = turns.at(-1);
   const appointment=appointments[0];
-  const meeting=appointment&&({accepted:`${npc.name}答应在咖啡馆见面。`,waiting:`${npc.name}先忙手边的事，约定还在。`,travelling:`${npc.name}正在赶往咖啡馆。`,arrived:npc.sceneId==="cafe_interior"?`${npc.name}已经到了。`:`${npc.name}曾按约到过咖啡馆。`,failed:`这次没能赴约：${appointment.reason}`,cancelled:"这次约定已取消。",refused:appointment.reason,deferred:appointment.reason}[appointment.status]);
+  const meeting=appointment&&`${npc.name}：${appointmentReply(appointment)}`;
   return <section className="paper scene-composer" data-testid="scene-composer" aria-label={`与${npc.name}对话`} onKeyDown={e=>e.stopPropagation()} onPointerDown={e=>e.stopPropagation()} onWheel={e=>e.stopPropagation()}>
     <div className="composer-heading"><div className="composer-name"><span className={`resident-dot ${npc.id}`} aria-hidden /><strong>{npc.name}</strong></div><nav aria-label="对话操作"><button onClick={onProfile}>居民档案</button><button onClick={()=>onHistory(!historyOpen)} aria-expanded={historyOpen}>查看历史</button><button aria-label="关闭对话" onClick={onClose}>告别 ×</button></nav></div>
     {historyOpen && <aside className="chat-history" aria-label={`${npc.name}的对话历史`}><div className="panel-heading"><strong>与{npc.name}的手记 · 最近 20 轮</strong><button aria-label="关闭历史" onClick={()=>onHistory(false)}>×</button></div><div className="chat-messages" ref={list}>
@@ -89,6 +104,7 @@ export default function SceneChat({ diagnostics=false,npc, available, onClose, o
       <button className="advance" type="submit" disabled={!available||pending||loading||!draft.trim()||!!error}>{pending?"等待回复…":"发送消息"}</button>
     </form>
     {meeting&&<p className="meeting-feedback" data-testid="meeting-feedback" aria-live="polite">{meeting}</p>}
+    {appointment?.status==="proposed"&&<button disabled={!available||pending||loading||!!error} onClick={()=>void send("确认这个时间")}>确认这个时间</button>}
     {diagnostics&&<div className="composer-hint"><small>{draft.length}/{MAX_MESSAGE} · Enter 发送 / Shift+Enter 换行</small><small>访客私聊 · 后台确认约定后才执行</small></div>}
   </section>;
 }
