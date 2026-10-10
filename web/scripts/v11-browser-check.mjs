@@ -69,8 +69,19 @@ try{
   const other=await(await b.request.get(base+'/api/npcs/aning/chat')).json();assert.deepEqual(other.appointments,[]);
   checks.push('browser invite, pending backend restart, automatic real road/portal arrival; player walks from square into cafe, private completed meeting recalled');
  }
+ if(stage==='game-ui'){
+  await expect(p.getByTestId('reply-source')).toHaveCount(0);await expect(p.getByTestId('revision')).toHaveCount(0);await expect(p.locator('.residents')).toHaveCount(0);
+  const bubble=await p.getByTestId('speech-bubble').boundingBox(),dock=await p.getByTestId('scene-composer').boundingBox();assert.ok(bubble.height<=105&&bubble.width<=265);assert.ok(dock.width<=700&&dock.height<180);
+  await p.getByRole('button',{name:'查看历史',exact:true}).click();await expect(p.getByTestId('chat-turn')).toHaveCount(8);await p.screenshot({path:`${dir}/07-game-history.png`,fullPage:true});await p.getByRole('button',{name:'关闭历史',exact:true}).click();
+  await p.getByRole('button',{name:'帮助',exact:true}).click();await p.getByRole('checkbox',{name:'开发诊断',exact:true}).check();await p.getByRole('button',{name:'关闭帮助',exact:true}).click();
+  await expect(p.getByTestId('reply-source')).toContainText('后台确认');await expect(p.getByTestId('revision')).toBeVisible();await p.screenshot({path:`${dir}/08-diagnostics.png`,fullPage:true});
+  await p.getByRole('button',{name:'帮助',exact:true}).click();await p.getByRole('checkbox',{name:'开发诊断',exact:true}).uncheck();await p.getByRole('button',{name:'关闭帮助',exact:true}).click();
+  const avatar=p.getByTestId('player'),pos=await avatar.getAttribute('data-y');await p.locator('textarea').fill('wasd');await p.locator('textarea').press('ArrowUp');assert.equal(await avatar.getAttribute('data-y'),pos);await p.locator('textarea').fill('');
+  await p.getByRole('button',{name:'居民档案',exact:true}).click();const hunger=Number(await p.getByTestId('stat-hunger').textContent());await p.getByRole('button',{name:/^送食物/}).click();await expect(p.getByTestId('stat-hunger')).toHaveText(String(Math.max(0,hunger-35)));await p.screenshot({path:`${dir}/09-profile-food.png`,fullPage:true});
+  await p.getByRole('button',{name:'关闭档案',exact:true}).click();await p.getByRole('button',{name:'关闭对话',exact:true}).click();
+  await p.setViewportSize({width:1366,height:768});await p.screenshot({path:`${dir}/10-1366.png`,fullPage:true});
+  checks.push('normal UI no model/version/status parade; compact bubble/input; full history; explicit diagnostics restores sources; focus isolation, real feed and 1366 viewport');
+ }
  await writeFile(`${dir}/result.json`,JSON.stringify({id,checks,calls,externalCalls:0,errors},null,2));
  const video=p.video();await a.close();a=null;await rename(await video.path(),`${dir}/journey.webm`);console.log(JSON.stringify({id,checks,calls}));
 }catch(error){await p?.screenshot({path:`${dir}/failure.png`,fullPage:true});throw error;}finally{await a?.close();await b?.close();await browser?.close();await stop();model.closeAllConnections();await new Promise(r=>model.close(r));log.end();await database().end();}
-
-

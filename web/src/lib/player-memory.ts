@@ -6,7 +6,8 @@ export type PlayerMemory = { version:1; meetings:number; familiarity:number; tru
 export const emptyPlayerMemory=():PlayerMemory=>({version:1,meetings:0,familiarity:0,trust:0,affection:0,recent:[]});
 // Explicit self-introduction only, not quoted stories, questions or inferred identity.
 export function introducedName(message:string):string|undefined {
-  return /^(?:我叫|请叫我)([\p{Script=Han}A-Za-z]{1,12})[。！!，,]?$/u.exec(message.trim())?.[1];
+  const name=/^(?:我叫|请叫我)([\p{Script=Han}A-Za-z]{1,12})[。！!，,]?$/u.exec(message.trim())?.[1];
+  return name&&!/^(?:你|他|她|大家|我们)|(?:去|到).*(?:咖啡|广场|住宅)/.test(name)?name:undefined;
 }
 export function rememberPlayer(memory:PlayerMemory,turn:ChatTurn):PlayerMemory {
   if(memory.first?.turnId===turn.id||memory.recent.some(e=>e.turnId===turn.id))return memory;
@@ -21,6 +22,7 @@ export function playerMemory(stored:PlayerMemory|null|undefined,history:ChatTurn
   return stored??history.reduce(rememberPlayer,emptyPlayerMemory());
 }
 export function recognitionReply(message:string,memory:PlayerMemory):string|undefined {
+  const name=introducedName(message);if(name)return `你好，${name}，我记住这个称呼了。`;
   if(/我(?:的名字|叫什么)|知道我名字/.test(message))return memory.name?`你之前说叫${memory.name}，我记下了。`:"你还没告诉我称呼，我不能猜。";
   if(!/记得我|认识我|我们.*(?:见过|聊过)|还认得/.test(message))return;
   if(!memory.first)return "我还没有与你见面的记录，你愿意介绍一下吗？";

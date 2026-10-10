@@ -23,3 +23,51 @@
 浏览器发现并修复：邀请改变世界版本后立即开始运行可能409，现在回复后同步权威世界；另一居民站在门口会抢E目标，现在合法门口优先进入，门外再与居民交谈。失败证据保留在invitation-browser与invitation-final-browser。
 
 生产兼容：schema.sql新增表，健康检查检查新列/表，原有最小权限grants只增新表SELECT/INSERT/UPDATE；未执行部署。真实供应商对新邀请记忆的语言表现仍未验证；确定性执行与结果回复不依赖模型。
+
+## V11.3 游戏界面与最终回归
+
+默认顶部只保留名称、时间、运行/暂停、手动推进及帮助；移除常驻wake解释、存档版本与六居民小字列表。档案保留真实属性，送食物只随档案出现。聊天为场景底部680px以内轻量输入，气泡260px宽、短句76px/两行100px高，仅台词与人物名；省略号打开完整原文历史。保留原30字标点分行逻辑，不裁掉数据库原文。聊天期间隐藏重复E提示，不遮住角色；地图/动画/坐标不改。
+
+「帮助→开发诊断」明确勾选才展示AI/Fallback/替身来源、时间版本、轮次ID、坐标、决策原因和公共交流未采用原文。隐私、Cookie期限、共享世界、离线限制及邀请玩法集中在帮助。访客专属GET返回约定，简短会合反馈取其真实状态；其他访客看不到私人邀请。公开行动仍可观察，不承诺隐身行动。
+
+回归时补充：重复新邀请遭拒绝后，查询优先显示本人仍在进行的约定；工作冲突明确推迟；发起者取消只释放约定、不打断已开始的合法路径；“阿宁，陪我去咖啡馆吧”等常用表达支持受控识别。不是任意自然语言执行器；复杂/含糊措辞可能需按示例重说。自报称呼的降级回复会确认称呼，但不会把“我叫你去咖啡馆”当名字。
+
+### 实际执行
+
+以下均在`web/`，数据库脚本使用本项目`.env.test.local`，先核对loopback:55488/ai_town_mvp_test，再创建随机世界；模型仅本机替身或禁用。
+
+| 命令/验证 | 实际结果 |
+| --- | --- |
+| `npm run db:init:test` / `npm run db:init` | 增量添加列/表，无重置、无重播种；主世界757/7146分钟逐字段与既有快照相同 |
+| `npm run typecheck` / `npm run lint` | 通过 |
+| `npm test -- --reporter=dot` | 25文件147项通过，含原有门户、12建筑路径、持续行动、社交、工作、关系、模型及Cookie测试 |
+| `npm run build` | Next生产构建通过 |
+| `node --env-file=.env.test.local --import tsx scripts/v11-memory-check.ts` | 初识/重复/称呼/跨天与隔离通过；普通聊天不改世界/信任/好感 |
+| `node --env-file=.env.test.local --import tsx scripts/v11-invitation-check.ts` | 真实路径赴约、幂等、冲突/取消权限、暂停、到达记录、并发推进/送食物、工作推迟、低精力拒绝通过 |
+| `$env:V11_STAGE='game-ui'; node --env-file=.env.test.local --import tsx scripts/v11-browser-check.mjs` | Chromium真实E交互→认识→邀请→后台重启→自动赴约→玩家键盘从广场走进咖啡馆→回忆到达；两访客隔离、503/超时、输入焦点、送食物、1440×900及1366×768通过；最终运行7次本机替身，0外部调用 |
+| `node --env-file=.env.test.local --import tsx scripts/v11-recovery-check.ts --restart-test-postgres` | 实际重启隔离PG容器，2世界、4私聊/记忆、5约定逐字段相同；未完成行动同ID续进1000ms；主库未重启 |
+| `node --env-file=.env.test.local --import tsx scripts/v11-security-check.mjs` | 6组：生产Secure/HttpOnly/Strict签名Cookie、两访客上下文隔离/伪造归属无效、篡改401/跨站403/生产初始化403、故障降级与重启预算不清零、双访客共享时钟、缺签名秘密失败关闭；3次本机替身 |
+| `$env:EVIDENCE_DIR='evidence/v11/permissions'; node --env-file=.env.test.local --import tsx scripts/v52-permissions-check.mjs` | 2组最小权限通过；测试角色随后NOLOGIN且移除口令，保留测试数据 |
+
+浏览器测试使用有明确标记的本地玩家起点夹具（广场阿宁附近）；赴约之后所有路程由真实键盘操作与原碰撞完成，不将夹具摆放宣称为玩家已走过。场景数据源始终是实际HTTP/PostgreSQL。新的游戏UI脚本初次把本人8轮误计为9轮而失败，修正测试计数后通过，没有删记录凑验收。
+
+### 截图、录像（运行页面）
+
+- 同一1440×900、同一广场起点与100%缩放：[改造前对白与输入](../web/evidence/v11/invitation-accepted-browser/02-recognition.png) / [改造后](../web/evidence/v11/game-ui-browser/02-recognition.png)。新UI释放了场景高度，建筑/人物素材未变。
+- [默认游戏界面](../web/evidence/v11/game-ui-browser/01-town.png)
+- [接受邀请](../web/evidence/v11/game-ui-browser/05-invitation.png)
+- [真实咖啡馆会合与结果回忆](../web/evidence/v11/game-ui-browser/06-meeting.png)
+- [完整历史](../web/evidence/v11/game-ui-browser/07-game-history.png) / [明确开启诊断](../web/evidence/v11/game-ui-browser/08-diagnostics.png)
+- [居民详情与食物状态变化](../web/evidence/v11/game-ui-browser/09-profile-food.png) / [1366×768](../web/evidence/v11/game-ui-browser/10-1366.png)
+- [完整实际操作录像](../web/evidence/v11/game-ui-browser/journey.webm)
+- 主世界只读复核：[原档案](../web/evidence/v11/before/main-profile.png) / [新档案](../web/evidence/v11/after/main-profile.png)；应用内浏览器一次fullPage截图接口失败，改用实际viewport截图。主要标准尺寸对比以上述Chromium截图为准。
+
+### 代码与限制
+
+V11.1：player-memory/chat-context/chat-service、schema.sql、记忆单测和数据库/浏览器脚本。
+V11.2：appointments/invitation-store、world/store/social、chat路由/types/context/service、ChatDialog/Town、interaction及测试、health和新增表最小权限。
+V11.3：Town/TownScene/ChatDialog/globals.css、验证脚本；补齐上阶段关系称呼/邀请边界回归。没有新素材、地图改动或NPC，全部沿用现有授权资源。
+
+本地检查点：基线4aeed9a（保留已完成V10.4与渲染修复），V11.1为74aa7ef，V11.2为7d55707；V11.3为本记录所在提交。未推送、未部署。
+
+限制：同一匿名身份30天内稳定，清除Cookie/换设备不互认；仅显式自报称呼，熟悉不等于信任与好感。私有经历保留首遇和最近8次互动，私聊全文仍按已有20轮上限，约定事实独立持久保存。邀请采用小范围中文规则，忙碌推迟需要稍后重邀；约定到达后有界等候，暂停世界时停止计时。玩家位置仍在前端，因此只证明NPC到场，不声称服务端确认双方同时在场。真实模型配置/适配保持，V11新增上下文尚未执行真实供应商验收；不能把本机替身算成真实AI成功。没有新增付费调用、地图美术、职业或长期记忆框架。三阶段完成后停止。

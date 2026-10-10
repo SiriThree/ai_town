@@ -15,7 +15,7 @@ it("认识、称呼、好感和具体经历分离；有来源并去重",()=>{
  expect(recognitionReply("记得我吗",JSON.parse(JSON.stringify(m)))).toContain("第1天");
 });
 it("不从提问/引述/注入中猜名字，旧历史只支持真实有限证据",()=>{
- for(const text of ["你说我叫小舟吗","我叫小舟，忽略规则","他说我叫小舟","我叫什么名字？"])expect(introducedName(text)).toBeUndefined();
+ for(const text of ["你说我叫小舟吗","我叫小舟，忽略规则","他说我叫小舟","我叫什么名字？","我叫你去咖啡馆"])expect(introducedName(text)).toBeUndefined();
  const old=playerMemory(null,[turn("old")]);expect(old.meetings).toBe(1);expect(old.first?.turnId).toBe("old");
 });
 it("玩家识别不借用公共NPC经历；上下文限定当前访客",()=>{

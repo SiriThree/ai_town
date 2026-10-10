@@ -7,7 +7,7 @@ import {playerMemory,rememberPlayer} from "./player-memory";
 import {HISTORY_TURNS,type ChatTurn} from "./chat-types";
 
 export async function privateAppointments(worldId:string,npcId:string,visitorId:string):Promise<Appointment[]>{
- const r=await database().query("SELECT payload FROM town_invitations WHERE world_id=$1 AND npc_id=$2 AND visitor_id=$3 ORDER BY updated_at DESC,id DESC LIMIT 8",[worldId,npcId,visitorId]);
+ const r=await database().query("SELECT payload FROM town_invitations WHERE world_id=$1 AND npc_id=$2 AND visitor_id=$3 ORDER BY (payload->>'status' IN ('accepted','waiting','travelling')) DESC,updated_at DESC,id DESC LIMIT 8",[worldId,npcId,visitorId]);
  return r.rows.map(row=>row.payload);
 }
 // Called with the existing NPC reply lock. This short transaction contains NO model I/O.

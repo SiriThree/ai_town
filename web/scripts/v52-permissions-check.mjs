@@ -9,7 +9,7 @@ const password=randomUUID(),id=`permissions-${randomUUID()}`;
 // Names and dummy password are generated here, not supplied by HTTP or copied from production.
 await initializeWorld(id);
 await database().query(`CREATE ROLE ${role} LOGIN PASSWORD '${password}' NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION`);
-await database().query(`GRANT CONNECT ON DATABASE ai_town_mvp_test TO ${role}; GRANT USAGE ON SCHEMA public TO ${role}; GRANT SELECT,UPDATE ON town_worlds TO ${role}; GRANT SELECT,INSERT,UPDATE ON town_private_chats,town_chat_limits TO ${role}`);
+await database().query(`GRANT CONNECT ON DATABASE ai_town_mvp_test TO ${role}; GRANT USAGE ON SCHEMA public TO ${role}; GRANT SELECT,UPDATE ON town_worlds TO ${role}; GRANT SELECT,INSERT,UPDATE ON town_private_chats,town_chat_limits,town_invitations TO ${role}`);
 url.username=role;url.password=password;const runtime=new Pool({connectionString:url.href,max:1});const checks=[];
 try{
   assert.equal((await runtime.query("SELECT id FROM town_worlds WHERE id=$1",[id])).rows.length,1);
@@ -26,4 +26,4 @@ try{
   // Leave evidence/data intact but revoke test login, so no working test credential remains.
   await database().query(`ALTER ROLE ${role} NOLOGIN PASSWORD NULL`);await database().end();
 }
-await mkdir("evidence/v5-2",{recursive:true});await writeFile("evidence/v5-2/permissions.json",JSON.stringify({date:new Date().toISOString(),worldId:id,role,checks,testRoleDisabled:true,productionTouched:false},null,2));console.log("2 PostgreSQL minimum-permission groups passed; test login disabled");
+const dir=process.env.EVIDENCE_DIR||"evidence/v5-2";await mkdir(dir,{recursive:true});await writeFile(`${dir}/permissions.json`,JSON.stringify({date:new Date().toISOString(),worldId:id,role,checks,testRoleDisabled:true,productionTouched:false},null,2));console.log("2 PostgreSQL minimum-permission groups passed; test login disabled");

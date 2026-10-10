@@ -24,6 +24,8 @@ async function load(): Promise<World> {
   return result.value;
 }
 export default function Town() {
+  const [diagnostics,setDiagnostics]=useState(false);
+  const [helpOpen,setHelpOpen]=useState(false);
   const [nearbyIds,setNearbyIds]=useState("");
   const [interactionMessage,setInteractionMessage]=useState("");
   const [sceneId,setSceneId]=useState<SceneId>("town");
@@ -149,47 +151,49 @@ export default function Town() {
   const present=npc?.sceneId===sceneId;
   const chatAvailable=!!npc&&nearbyIds.split(",").includes(npc.id)&&!!world&&!busyReason(npc,world);
   const feedback=chatOpen&&npc?chatFeedback(npc.name,chatPhase,present,chatAvailable):interactionMessage;
-  return <main>
+  return <main className={diagnostics?"diagnostics-mode":"game-mode"}>
     <header className="town-header">
       <div className="brand"><span className="brand-mark" aria-hidden>✦</span><div><h1>晨露村</h1><p>小镇手记 <span> / </span> 第一章</p></div></div>
-      <div className="clock"><span className="sun" aria-hidden>☀</span><div><strong data-testid="world-time">{world ? worldTime(world.minute) : "等待存档"}</strong><small data-testid="run-status">{world && runState(world).running ? "自动运行 · 每秒结算行动进度" : "已暂停 · 可手动推进"}</small></div></div>
+      <div className="clock"><span className="sun" aria-hidden>☀</span><div><strong data-testid="world-time">{world ? worldTime(world.minute) : "等待存档"}</strong><small data-testid="run-status">{world && runState(world).running ? "时光流转" : "时光暂停"}</small></div></div>
       <button className="run-toggle" aria-pressed={!!world && runState(world).running} disabled={pending || syncing || !world} onClick={toggleRun}>{world && runState(world).running ? "暂停自动运行" : "开始自动运行"}</button>
       <button className="advance" disabled={pending || syncing || !world} onClick={advance}>{pending ? "处理中…" : "推进一步"}<span aria-hidden> ▷</span></button>
+      <button className="help-toggle" onClick={()=>setHelpOpen(!helpOpen)} aria-expanded={helpOpen}>帮助</button>
     </header>
-    <div className="status-line"><p role="status">{error || syncError || message}</p><span>网页打开时自动推进 · 无离线补算</span>{error && <button disabled={pending} onClick={reload}>重新读取</button>}</div>
+    {helpOpen&&<aside className="paper game-help" aria-label="玩法与隐私"><div className="panel-heading"><strong>在小镇生活</strong><button onClick={()=>setHelpOpen(false)} aria-label="关闭帮助">×</button></div><p>WASD / 方向键移动，靠近门口或居民按 E。输入时 Enter 发送，Shift + Enter 换行，Esc 告别。</p><p>可以邀请居民在麦香咖啡馆见面。居民会考虑手头的事；答应后你也需要自己走过去。暂停时间时，大家暂不行动。</p><p>这里是共同生活的小镇：访客共享时间和居民状态。私聊与认识记录仅属于当前浏览器身份；请勿输入敏感信息。清除 Cookie、换设备或30天过期后，居民无法认作同一位访客。已确认的赴约行动会公开可见，私聊原文不会。</p><p>无人打开网页时，小镇不会自行快进。</p><label><input type="checkbox" checked={diagnostics} onChange={e=>setDiagnostics(e.target.checked)}/> 开发诊断</label></aside>}
+    {(diagnostics||error||syncError)&&<div className="status-line"><p role="status">{error || syncError || message}</p>{diagnostics&&<span>网页打开时自动推进 · 无离线补算</span>}{error && <button disabled={pending} onClick={reload}>重新读取</button>}</div>}
     {world ? <>
       <section className={`scene-frame ${sceneId!=="town"?"interior":""}`}>
-        <TownScene onTalk={talk} onNearChange={setNearbyIds} onPublicHistory={()=>setPanel("log")} controlsBlocked={panel!==null||(historyOpen&&!!present)} onSceneChange={setSceneId} world={world} selected={selected} onSelect={select} speech={chatOpen && speech?.npcId===selected ? speech.turn : null} onExpand={()=>setHistoryOpen(true)} />
-        {feedback&&<p className="interaction-feedback" role="status" data-testid="interaction-feedback">{feedback}</p>}
+        <TownScene diagnostics={diagnostics} onTalk={talk} onNearChange={setNearbyIds} onPublicHistory={()=>setPanel("log")} controlsBlocked={panel!==null||(historyOpen&&!!present)} onSceneChange={setSceneId} world={world} selected={selected} onSelect={select} speech={chatOpen && speech?.npcId===selected ? speech.turn : null} onExpand={()=>setHistoryOpen(true)} />
+        {feedback&&(diagnostics||!chatOpen||chatPhase==="sending"||chatPhase==="error")&&<p className="interaction-feedback" role="status" data-testid="interaction-feedback">{feedback}</p>}
         <div className="interaction-dock" hidden={!present}>
-        {npc && <div className="resident-care" aria-label="居民干预" onPointerDown={e=>e.stopPropagation()} onKeyDown={e=>e.stopPropagation()}>
+        {npc && panel==="profile" && <div className="resident-care" aria-label="居民干预" onPointerDown={e=>e.stopPropagation()} onKeyDown={e=>e.stopPropagation()}>
           <div><strong>{npc.name}</strong><span>⌖ {npcPlace(npc,world)}</span><span>饥饿 <b data-testid="care-hunger">{npc.hunger}</b>/100</span></div>
           <button disabled={pending||syncing||npc.hunger<=0} onClick={feed}>送食物 <small>饥饿 −{FOOD_AMOUNT}</small></button>
-          <p data-testid="food-feedback">{foodFeedback?.npcId===npc.id?foodFeedback.text:npc.hunger<=0?"已经吃饱，暂不需要食物。":"提供食物不会改变地点或直接指定下一步行动。"}</p>
+          <p data-testid="food-feedback">{foodFeedback?.npcId===npc.id?foodFeedback.text:npc.hunger<=0?"已经吃饱，暂不需要食物。":""}</p>
         </div>}
-        {chatOpen && npc && <SceneChat key={npc.id} npc={npc} onClose={closeChat} available={chatAvailable} onPhaseChange={setChatPhase} onReply={receiveReply} onProfile={()=>setPanel(panel==="profile"?null:"profile")} historyOpen={historyOpen} onHistory={setHistoryOpen} />}
+        {chatOpen && npc && <SceneChat diagnostics={diagnostics} key={npc.id} npc={npc} onClose={closeChat} available={chatAvailable} onPhaseChange={setChatPhase} onReply={receiveReply} onProfile={()=>setPanel(panel==="profile"?null:"profile")} historyOpen={historyOpen} onHistory={setHistoryOpen} />}
         </div>
         {panel === "profile" && npc && <aside className="paper profile" aria-label="居民档案" data-testid="profile">
           <div className="panel-heading"><span>居 民 档 案</span><button aria-label="关闭档案" onClick={() => setPanel(null)}>×</button></div>
           <div className="identity"><span className={`portrait ${npc.id}`} aria-hidden>{npc.name.slice(-1)}</span><div><h2>{npc.name}</h2><p>{npc.personality === "outgoing" ? "外向 · 喜欢热闹" : "安静 · 喜欢阅读"}</p></div></div>
           <p className="location">⌖ {npcPlace(npc,world)}</p><p>{npc.bio}</p>{npc.job&&<p>职业：{npc.job==="cafe"?"咖啡馆备餐员":"杂货铺理货员"}</p>}
           <dl className="needs">{([["hunger", "饥饿", "越低越饱足"], ["energy", "精力", "越高越有活力"], ["mood", "心情", "越高越愉快"]] as const).map(([key,label,hint]) => <div key={key}><dt>{label}<small>{hint}</small></dt><dd><span data-testid={`stat-${key}`}>{npc[key]}</span><span className={`meter ${key}`}><span style={{width:`${npc[key]}%`}} /></span></dd></div>)}</dl>
-          <div className="decision"><small>此刻的行动</small><h3 data-testid="npc-action">{npc.action}</h3><p>{npc.reason}</p></div>
+          <div className="decision"><small>此刻的行动</small><h3 data-testid="npc-action">{npc.action}</h3>{diagnostics&&<p>{npc.reason}</p>}</div>
           {npc.workTask&&<p data-testid="work-task">当前任务：{npc.workTask.kind==="cafe"?"制作餐点":"整理货架"} · {npc.workTask.progress}/2 · {npc.workTask.phase==="paused"?"先恢复需求，保留进度":npc.workTask.phase==="completed"?"已完成":"进行中"}<br/>累计真实产出：餐点 {world.workOutputs?.cafe??0} / 货架 {world.workOutputs?.store??0}</p>}
-          {personalMemories(world,npc.id).slice(-2).map(m=><p key={m.eventId} className="memory-note" data-testid="npc-memory">亲历：{m.summary}<small> 来源事件 #{m.eventId}</small></p>)}
-          <p className="profile-foot">{worldTime(world.minute)} · 来自已保存的世界</p>
+          {personalMemories(world,npc.id).slice(-2).map(m=><p key={m.eventId} className="memory-note" data-testid="npc-memory">亲历：{m.summary}{diagnostics&&<small> 来源事件 #{m.eventId}</small>}</p>)}
+          {diagnostics&&<p className="profile-foot">{worldTime(world.minute)} · {npc.sceneId} ({npc.position.x.toFixed(1)}, {npc.position.y.toFixed(1)})</p>}
           <button className="profile-chat" disabled={pending||!present||!nearbyIds.split(",").includes(npc.id)} onClick={()=>talk(npc.id)}>靠近后与{npc.name}对话 <span aria-hidden>↗</span></button>
         </aside>}
       </section>
       <section className="town-bottom">
-        <div className="residents"><small>今日居民</small><div>{world.npcs.map(n => <button key={n.id} disabled={n.sceneId!==sceneId} aria-pressed={selected===n.id} onClick={() => select(n.id)}><span className={`resident-dot ${n.id}`} />{n.name}<span className="resident-action">{n.sceneId!==sceneId?SCENES[n.sceneId].name:n.action}</span></button>)}</div></div>
+        {diagnostics&&<div className="residents"><small>今日居民</small><div>{world.npcs.map(n => <button key={n.id} disabled={n.sceneId!==sceneId} aria-pressed={selected===n.id} onClick={() => select(n.id)}><span className={`resident-dot ${n.id}`} />{n.name}<span className="resident-action">{n.sceneId!==sceneId?SCENES[n.sceneId].name:n.action}</span></button>)}</div></div>}
         <div className="latest"><div className="latest-title"><h2>街角近况</h2><button onClick={() => setPanel("log")}>打开日志 <span aria-hidden>↗</span></button></div><div data-testid="latest-events">{world.events.length ? world.events.slice(-2).map(e => <p key={e.id}><time>{worldTime(e.minute).split(" · ")[1]}</time>{e.text}</p>) : <p className="muted">清晨的小镇刚刚醒来，日常将在下一步发生。</p>}</div></div>
       </section>
-      <footer><span>共享存档：所有访客可推进、暂停和送食物。</span><span data-testid="revision">存档版本 {world.revision}</span></footer>
+      {diagnostics&&<footer><span>共享存档：所有访客可推进、暂停和送食物。</span><span data-testid="revision">存档版本 {world.revision}</span></footer>}
       <dialog ref={dialog} className="paper log-dialog" onCancel={() => setPanel(null)}>
         <div className="panel-heading"><h2>小镇日志</h2><button autoFocus aria-label="关闭日志" onClick={() => setPanel(null)}>×</button></div>
         <p className="muted">最近 100 条已保存事件 · 新的在前</p>
-        <div className="log-list">{[...(world.conversations??[])].reverse().map(c=><article key={c.id} data-testid="public-conversation"><time>{worldTime(c.minute)} · 公开居民交流</time>{c.turns.map(t=><p key={t.npcId}><strong>{world.npcs.find(n=>n.id===t.npcId)?.name}：</strong>{t.reply}{t.rejectedReply&&<details><summary>未采用的超长模型原文</summary>{t.rejectedReply}</details>}<small> [{t.source==="ai"?(t.testMode?"AI测试替身":"AI"):"本地降级"}]</small></p>)}</article>)}{world.events.length ? [...world.events].reverse().map(e => <article key={e.id}><time>{worldTime(e.minute)}</time><h3>{e.text}</h3><p>{e.reason}</p></article>) : <p>还没有发生事件。推进一步，看看居民的选择。</p>}</div>
+        <div className="log-list">{[...(world.conversations??[])].reverse().map(c=><article key={c.id} data-testid="public-conversation"><time>{worldTime(c.minute)} · 公开居民交流</time>{c.turns.map(t=><p key={t.npcId}><strong>{world.npcs.find(n=>n.id===t.npcId)?.name}：</strong>{t.reply}{diagnostics&&t.rejectedReply&&<details><summary>未采用的超长模型原文</summary>{t.rejectedReply}</details>}{diagnostics&&<small> [{t.source==="ai"?(t.testMode?"AI测试替身":"AI"):"本地降级"}]</small>}</p>)}</article>)}{world.events.length ? [...world.events].reverse().map(e => <article key={e.id}><time>{worldTime(e.minute)}</time><h3>{e.text}</h3>{diagnostics&&<p>{e.reason}</p>}</article>) : <p>还没有发生事件。推进一步，看看居民的选择。</p>}</div>
       </dialog>
     </> : <section className="loading-paper paper"><h2>翻开小镇手记</h2><p>{error ? "数据库连接尚未就绪，页面不会生成虚假的世界。" : "正在从后台读取居民的日常…"}</p></section>}
   </main>;

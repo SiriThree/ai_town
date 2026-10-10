@@ -36,7 +36,7 @@ export async function chat(npcId: string, input: unknown, visitorId: string, id 
     const history: ChatTurn[] = result.rows[0]?.turns || [];
     const memory=playerMemory(result.rows[0]?.player_memory,history);
     await requireChatSlot(id);
-    const intent=invitationIntent(message);
+    const intent=invitationIntent(message,npc.name);
     if(intent==="invite"||intent==="cancel")return await confirmInvitation(client,id,npcId,visitorId,message,requestId as string??randomUUID(),intent==="cancel");
     const appointments=await privateAppointments(id,npcId,visitorId);
     const reply = intent==="status"||intent==="ambiguous"?{reply:intent==="status"?await appointmentStatusReply(id,npcId,visitorId):"你是想约我去麦香咖啡馆见面吗？",source:"fallback" as const,reason:"controlled_action" as const}:

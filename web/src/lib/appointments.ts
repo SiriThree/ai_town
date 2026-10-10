@@ -7,12 +7,13 @@ import type {PlayerMemory} from "./player-memory";
 export type AppointmentStatus="accepted"|"waiting"|"travelling"|"arrived"|"failed"|"cancelled"|"refused"|"deferred";
 export type Appointment={id:string;target:"cafe";status:AppointmentStatus;reason:string;createdMinute:number;updatedMinute:number;deadlineMinute:number;arrivedMinute?:number};
 export const activeAppointment=(a:Appointment|undefined)=>!!a&&["accepted","waiting","travelling"].includes(a.status);
-export function invitationIntent(text:string):"invite"|"cancel"|"status"|"ambiguous"|null {
- const s=text.trim().replace(/[。！？!?，,\s]/g,"");
+export function invitationIntent(text:string,npcName?:string):"invite"|"cancel"|"status"|"ambiguous"|null {
+ const addressed=npcName&&[npcName+"，",npcName+",",npcName+" "].some(prefix=>text.trim().startsWith(prefix))?text.trim().slice(npcName.length+1):text;
+ const s=addressed.trim().replace(/[。！？!?，,\s]/g,"");
  if(/^(?:取消|算了取消)(?:我们)?(?:去咖啡馆的)?(?:约定|邀请|会合)$/.test(s))return "cancel";
  if(/(?:约定|邀请|会合).*(?:怎么样|状态|记得|完成)|(?:记得|还记得).*(?:约定|邀请|会合)|(?:到了|到咖啡馆了吗|到麦香咖啡馆了吗)/.test(s))return "status";
  // Whitelist a small supported language, never execute quoted, negated or compound stories.
- if(/^(?:请问)?(?:我们|咱们|你愿意|你要不要|要不要|能不能|可以|请你|邀请你|我邀请你)?(?:一起|和我|跟我)?(?:去|到)(?:麦香)?咖啡馆(?:见面|会合|坐坐|喝杯咖啡|喝咖啡|聊聊)?(?:吧|吗|好吗|好不好)?$/.test(s))return "invite";
+ if(/^(?:请问)?(?:我们|咱们|你愿意|你要不要|要不要|能不能|可以|请你|邀请你|我邀请你|我想邀请你|我想请你)?(?:一起|和我|跟我|陪我)?(?:去|到)(?:麦香)?咖啡馆(?:见面|会合|坐坐|喝杯咖啡|喝咖啡|聊聊)?(?:吧|吗|好吗|好不好)?$/.test(s))return "invite";
  if(/^(?:我们|咱们|要不要)?(?:一起|跟我|和我)去(?:吧|吗)?$/.test(s))return "ambiguous";
  return null;
 }

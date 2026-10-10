@@ -12,6 +12,8 @@ try{
  await initializeWorld(id);const first=await readWorld(id);const key=randomUUID(),msg="我们一起去咖啡馆吧";
  const turn=await chat("aning",msg,a,id,key);assert.equal(turn.reason,"controlled_action");let w=await readWorld(id);assert.equal(w.npcs[1].appointment?.status,"accepted");
  assert.deepEqual(await chat("aning",msg,a,id,key),turn);assert.equal((await privateAppointments(id,"aning",a)).length,1);
+ assert.match((await chat("aning",msg,a,id,randomUUID())).reply,/已经有/);
+ assert.equal((await privateAppointments(id,"aning",a))[0].status,"accepted","another refusal must not hide the active commitment");
  await assert.rejects(chat("aning","邀请你去咖啡馆",a,id,key));
  assert.deepEqual(await privateAppointments(id,"aning",b),[]);assert.ok(!JSON.stringify(w).includes(a));assert.ok(!JSON.stringify(w).includes(msg));
  const outsider=await chat("aning",msg,b,id,randomUUID());assert.match(outsider.reply,/已经有/);
@@ -29,6 +31,12 @@ try{
  await updateWorld(id,current=>{const next=structuredClone(current);next.revision++;next.npcs[0].energy=5;return next;});
  assert.match((await chat("aqing",msg,a,id,randomUUID())).reply,/太累/);
  const saved=await readWorld(id);assert.ok(saved.minute>first.minute);
+ const worker=saved.npcs.find(n=>n.workTask?.phase==="active")!;assert.ok(worker);
+ assert.match((await chat(worker.id,msg,a,id,randomUUID())).reply,/手头/);
+ assert.deepEqual(await readWorld(id),saved);
+ const cancelId=id+"-cancel";await initializeWorld(cancelId);await chat("aning",msg,a,cancelId,randomUUID());let cancelled=await readWorld(cancelId);cancelled=await tickWorld(cancelled.revision,cancelId);const actionId=cancelled.npcs[1].ongoing!.id;
+ await chat("aning","取消约定",a,cancelId,randomUUID());cancelled=await readWorld(cancelId);assert.equal(cancelled.npcs[1].appointment?.status,"cancelled");assert.equal(cancelled.npcs[1].ongoing!.id,actionId);
+ cancelled=await tickWorld(cancelled.revision,cancelId);assertWorld(cancelled);assert.equal(cancelled.npcs[1].appointment?.status,"cancelled");
  await mkdir(dir,{recursive:true});await writeFile(`${dir}/result.json`,JSON.stringify({id,checks:["durable accept/idempotency/conflict","privacy and owner cancellation","pause/no offline progress","real road and portal arrival","private result and memory query","concurrent wake/feed","low-energy refusal"],timeline,world:saved,externalCalls:0},null,2));
  console.log("V11.2 PostgreSQL seven checks passed",id);
 }finally{await database().end();}

@@ -60,3 +60,36 @@ main .scene-frame.interior:has(.interaction-dock:not([hidden]) .scene-composer) 
 .public-speech .speech-content p{white-space:pre-line;word-break:normal;overflow-wrap:anywhere;line-height:1.6;text-wrap:pretty}
 
 .npc-target.interaction-focus{outline:2px dashed #fff0aa;outline-offset:5px}.notice-focus{position:absolute;color:#fff0aa;font-size:36px;transform:translate(-50%,-100%)}.interaction-feedback{position:absolute;bottom:70px;left:50%;transform:translateX(-50%);z-index:8;background:#fff1ce;border:2px solid #88653b;padding:6px 12px;pointer-events:none;max-width:70%}.speech-content [data-testid="chat-reply"]{white-space:pre-line;text-wrap:pretty}
+
+/* V11: game-first presentation. Diagnostics are opt-in; world geometry is unchanged. */
+main.game-mode .scene,main.game-mode:has(.resident-care) .scene,main.game-mode:has(.scene-composer) .scene,main.game-mode .scene-frame.interior:has(.interaction-dock:not([hidden]) .scene-composer) .scene{height:clamp(440px,calc(100dvh - 145px),850px)}
+.game-mode .scene-frame{margin-top:10px;position:relative}
+.game-mode .interaction-dock{position:absolute;bottom:12px;left:50%;transform:translateX(-50%);width:min(680px,calc(100% - 28px));z-index:5;pointer-events:none}
+.game-mode .interaction-dock>*{pointer-events:auto}
+.game-mode .scene-composer{border:2px solid #93744b;box-shadow:inset 0 0 0 2px #e4ce9f,3px 4px #513d3026;padding:8px 12px;background:#f7ecd2}
+.game-mode .composer-heading{margin-bottom:4px}.game-mode .composer-name strong{font-size:14px}.game-mode .composer-heading nav{gap:14px}
+.game-mode .composer-status{min-height:0;font-size:12px;padding-bottom:5px}.game-mode .composer-status:has(.player-preview){max-height:22px}
+.game-mode .scene-composer textarea{font-size:14px;height:35px;min-height:35px}.game-mode .scene-composer form{gap:8px}
+.game-mode .meeting-feedback{font-size:12px;color:#586646;margin-top:6px;line-height:1.5}
+.game-mode .resident-care{border:2px solid #93744b;background:#f7ecd2;margin-bottom:5px;display:flex;padding:8px 12px}
+.game-mode .resident-care>p:empty{display:none}.game-mode .resident-care>button{margin-left:auto}
+.game-mode .speech-bubble{padding:9px 12px;box-shadow:inset 0 0 0 1px #dfc493,2px 3px #533d302b;border-width:2px}
+.game-mode .speech-content{overflow:hidden}.game-mode .speech-bubble .reply-heading{margin-bottom:5px;padding-right:25px}
+.game-mode .speech-bubble p{font-size:14px;line-height:1.7;word-break:normal;overflow-wrap:normal}
+.game-mode .speech-bubble .bubble-open{position:absolute;right:10px;top:5px;margin:0;text-decoration:none;padding:2px 5px;font-weight:bold;font-size:13px}
+.game-mode .bubble-tail{border-width:2px}
+.game-mode .play-mode .place-label{opacity:0;pointer-events:none}.game-mode .play-mode .place-label.near{opacity:1}
+.game-mode .npc-target:not(.selected):not(.interaction-focus):not(:hover)>span{visibility:hidden}
+.game-mode .map-caption{padding:9px 12px}.game-mode .map-caption span{font-size:13px;letter-spacing:1px}
+.game-mode .player-controls{padding:7px 12px;font-size:12px;pointer-events:none}
+.game-mode .scene-frame:has(.scene-composer) .player-controls{bottom:154px}
+.game-mode .interaction-feedback{bottom:164px;max-width:440px;font-size:12px}
+.game-mode .town-bottom{display:block;margin:8px 0 0}.game-mode .latest{display:flex;align-items:center;gap:22px}.game-mode .latest-title{gap:16px;white-space:nowrap;margin:0}.game-mode .latest p{font-size:12px}
+.game-mode .latest [data-testid=latest-events]>p:not(:last-child){display:none}
+.help-toggle{border:1px solid #bca37b;background:#f8eed7;padding:8px 12px;white-space:nowrap}
+.game-help{position:fixed;right:26px;top:76px;width:min(380px,calc(100vw - 32px));z-index:12;padding:18px 20px;color:#675036;box-shadow:5px 6px #4c3a282e}
+.game-help p{font-size:13px;line-height:1.8;margin:10px 0}.game-help label{display:block;border-top:1px dashed #c2ab82;padding-top:12px;margin-top:12px;font-size:12px}.game-help input{margin-right:8px}
+.game-mode .profile{max-height:calc(100% - 24px)}
+@media(max-width:800px){.game-mode .town-header{gap:8px}.game-mode .brand p{display:none}.game-mode .latest{gap:10px}.game-mode .latest p{font-size:11px}.game-mode .interaction-dock{width:calc(100% - 20px)}}
+
+.game-mode .player-controls{left:14px;transform:none;bottom:14px}.game-mode .scene-frame:has(.scene-composer) .player-controls{display:none}
